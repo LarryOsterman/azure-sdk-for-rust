@@ -1,0 +1,105 @@
+//#![cfg(all(test, feature = "test_e2e"))] // to run this, do: `cargo test --features test_e2e`
+//cspell: words eventhubs eventhub
+use azure_core::auth::TokenCredential;
+use azure_identity::{DefaultAzureCredential, TokenCredentialOptions};
+use azure_messaging_eventhubs::producer::{ProducerClient, ProducerClientOptions};
+use std::env;
+use tracing::{event, info};
+
+mod common;
+
+#[tokio::test]
+async fn test_new() {
+    common::setup();
+    let host = env::var("EVENTHUBS_HOST").unwrap();
+    let eventhub = env::var("EVENTHUB_NAME").unwrap();
+    let _client = ProducerClient::new(
+        host,
+        eventhub,
+        DefaultAzureCredential::create(TokenCredentialOptions::default()).unwrap(),
+        ProducerClientOptions::builder()
+            .with_application_id("test_new")
+            .build(),
+    );
+}
+
+#[tokio::test]
+async fn test_new_with_error() {
+    common::setup();
+    let eventhub = env::var("EVENTHUB_NAME").unwrap();
+    let producer = ProducerClient::new(
+        "invalid_host",
+        eventhub,
+        azure_identity::DefaultAzureCredential::create(TokenCredentialOptions::default()).unwrap(),
+        ProducerClientOptions::builder()
+            .with_application_id("test_new_with_error")
+            .build(),
+    )
+    .unwrap();
+    let result = producer.open().await;
+    assert!(result.is_err());
+    event!(tracing::Level::INFO, "Error: {:?}", result);
+}
+
+#[tokio::test]
+async fn test_open() {
+    common::setup();
+    let host = env::var("EVENTHUBS_HOST").unwrap();
+    let eventhub = env::var("EVENTHUB_NAME").unwrap();
+    let client = ProducerClient::new(
+        host,
+        eventhub,
+        azure_identity::DefaultAzureCredential::create(TokenCredentialOptions::default()).unwrap(),
+        ProducerClientOptions::builder()
+            .with_application_id("test_open")
+            .build(),
+    )
+    .unwrap();
+    client.open().await.unwrap();
+}
+#[tokio::test]
+async fn test_close() {
+    common::setup();
+    let host = env::var("EVENTHUBS_HOST").unwrap();
+    let eventhub = env::var("EVENTHUB_NAME").unwrap();
+    let client = ProducerClient::new(
+        host,
+        eventhub,
+        azure_identity::DefaultAzureCredential::create(TokenCredentialOptions::default()).unwrap(),
+        ProducerClientOptions::builder()
+            .with_application_id("test_close")
+            .build(),
+    )
+    .unwrap();
+    client.open().await.unwrap();
+    client.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_get_properties() {
+    common::setup();
+    let host = env::var("EVENTHUBS_HOST").unwrap();
+    let eventhub = env::var("EVENTHUB_NAME").unwrap();
+
+    let credential = DefaultAzureCredential::create(TokenCredentialOptions::default()).unwrap();
+    info!("Credential: {:?}", credential);
+    let token = credential
+        .get_token(&["https://eventhubs.azure.net/.default"])
+        .await
+        .unwrap();
+    info!("Token: {:?}", token.token.secret());
+
+    let client = ProducerClient::new(
+        host,
+        eventhub.clone(),
+        credential,
+        ProducerClientOptions::builder()
+            .with_application_id("test_get_properties")
+            .build(),
+    )
+    .unwrap();
+    client.open().await.unwrap();
+    let properties = client.get_eventhub_properties().await.unwrap();
+    info!("Properties: {:?}", properties);
+    assert_eq!(properties.name, eventhub);
+}
