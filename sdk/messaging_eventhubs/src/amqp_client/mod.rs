@@ -13,10 +13,12 @@ use crate::amqp_client::value::{AmqpOrderedMap, AmqpSymbol, AmqpValue};
 use async_trait::async_trait;
 use azure_core::error::Result;
 use error::AmqpOpenError;
-use fe2o3::{connection::Fe2o3AmqpConnection, value::Fe2o3Symbol, value::Fe2o3Value};
 use std::fmt::Debug;
 use time::Duration;
 use tracing::debug;
+
+#[cfg(any(feature = "enable-fe2o3-amqp"))]
+use fe2o3::connection::Fe2o3AmqpConnection;
 
 pub struct AmqpConnectionBuilder {
     max_frame_size: Option<u32>,
@@ -80,25 +82,25 @@ impl AmqpConnectionBuilder {
             }
             if self.offered_capabilities.is_some() {
                 for capability in self.offered_capabilities.unwrap() {
-                    let fe2o3capability: Fe2o3Symbol = capability.into();
-                    builder = builder.add_offered_capabilities(fe2o3capability.0);
+                    let capability: fe2o3_amqp_types::primitives::Symbol = capability.into();
+                    builder = builder.add_offered_capabilities(capability);
                 }
             }
             if self.desired_capabilities.is_some() {
                 for capability in self.desired_capabilities.unwrap() {
-                    let fe2o3capability: Fe2o3Symbol = capability.into();
-                    builder = builder.add_desired_capabilities(fe2o3capability.0);
+                    let capability: fe2o3_amqp_types::primitives::Symbol = capability.into();
+                    builder = builder.add_desired_capabilities(capability);
                 }
             }
             if self.properties.is_some() {
                 let mut fields = fe2o3_amqp::types::definitions::Fields::new();
                 for property in self.properties.unwrap().iter() {
                     debug!("Property: {:?}, Value: {:?}", property.0, property.1);
-                    let k: Fe2o3Symbol = property.0.into();
-                    let v: Fe2o3Value = property.1.into();
+                    let k: fe2o3_amqp_types::primitives::Symbol = property.0.into();
+                    let v: fe2o3_amqp_types::primitives::Value = property.1.into();
                     debug!("Property2: {:?}, Value: {:?}", k, v);
 
-                    fields.insert(k.0, v.0);
+                    fields.insert(k, v);
                 }
                 builder = builder.properties(fields);
             }

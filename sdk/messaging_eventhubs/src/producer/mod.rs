@@ -19,7 +19,7 @@ use azure_core::{
 use std::{boxed::Box, collections::HashMap};
 use std::{
     sync::{Arc, OnceLock},
-    time::{SystemTime, SystemTimeError},
+    time::SystemTime,
 };
 use time::UtcOffset;
 use tokio::sync::Mutex;
@@ -160,8 +160,8 @@ impl ProducerClient {
         let name: String = response.get("name".to_string()).unwrap().clone().into();
         let created_at: SystemTime =
             Into::<SystemTime>::into(response.get("created_at".to_string()).unwrap().clone());
-        let partition_count: i32 =
-            Into::<i32>::into(response.get("partition_count".to_string()).unwrap().clone());
+        //        let partition_count: i32 =
+        //            Into::<i32>::into(response.get("partition_count".to_string()).unwrap().clone());
 
         let partition_ids = response.get("partition_ids".to_string()).unwrap();
         let partition_ids = match partition_ids {
@@ -191,7 +191,7 @@ impl ProducerClient {
     }
 
     async fn ensure_management_client(&self) -> Result<()> {
-        let mut mgmt_client = self.mgmt_client.lock().await;
+        let mgmt_client = self.mgmt_client.lock().await;
 
         if mgmt_client.get().is_some() {
             return Ok(());
@@ -243,7 +243,7 @@ impl ProducerClient {
             return Err(ErrorKind::MissingConnection.into());
         }
         if !scopes.contains_key(url) {
-            let mut connection = self.connection.get().unwrap();
+            let connection = self.connection.get().unwrap();
             let cbs = connection.create_claims_based_security().await?;
 
             debug!("Get Token.");
@@ -260,6 +260,7 @@ impl ProducerClient {
                 .unwrap();
             cbs.authorize_path(url, token.token.secret(), expires_at)
                 .await?;
+            scopes.insert(url.to_string(), token);
         }
         Ok(())
     }

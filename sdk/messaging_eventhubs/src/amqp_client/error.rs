@@ -5,41 +5,41 @@
 
 macro_rules! impl_from_external_error {
     ($amqp_error:ident, $foreign_error:ty) => {
-        pub struct $amqp_error(pub $foreign_error);
+    pub struct $amqp_error(pub $foreign_error);
 
-impl From<$foreign_error> for $amqp_error {
-    fn from(e: $foreign_error) -> Self {
-        $amqp_error(e)
-    }
-}
-
-impl From<$amqp_error> for AmqpError {
-    fn from(e: $amqp_error) -> Self {
-        AmqpError {
-            kind: ErrorKind::$amqp_error { source: e },
+    impl From<$foreign_error> for $amqp_error {
+        fn from(e: $foreign_error) -> Self {
+            $amqp_error(e)
         }
     }
-}
 
-impl From<$foreign_error> for AmqpError {
-    fn from(e: $foreign_error) -> Self {
-        AmqpError {
-            kind: ErrorKind::$amqp_error {
-                source: $amqp_error(e),
-            },
+    impl From<$amqp_error> for AmqpError {
+        fn from(e: $amqp_error) -> Self {
+            AmqpError {
+                kind: ErrorKind::$amqp_error { source: e },
+            }
         }
     }
-}
 
-impl From<$amqp_error> for azure_core::Error {
-    fn from(e: $amqp_error) -> Self {
-        Self::new(
-            azure_core::error::ErrorKind::Other,
-            Box::new(AmqpError::from(e)),
-        )
+    impl From<$foreign_error> for AmqpError {
+        fn from(e: $foreign_error) -> Self {
+            AmqpError {
+                kind: ErrorKind::$amqp_error {
+                    source: $amqp_error(e),
+                },
+            }
+        }
     }
-}
-    };
+
+    impl From<$amqp_error> for azure_core::Error {
+        fn from(e: $amqp_error) -> Self {
+            Self::new(
+                azure_core::error::ErrorKind::Other,
+                Box::new(AmqpError::from(e)),
+            )
+        }
+    }
+};
 
     ($($amqp_error:ident, $foreign_error:ty),*) => {
         $(impl_from_external_error!($amqp_error, $foreign_error);)*

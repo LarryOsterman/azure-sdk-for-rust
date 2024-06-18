@@ -11,11 +11,7 @@ use std::{borrow::BorrowMut, sync::OnceLock};
 use tokio::sync::Mutex;
 use tracing::debug;
 
-use crate::amqp_client::fe2o3::{
-    cbs::Fe2o3ClaimsBasedSecurity,
-    session::Fe2o3AmqpSession,
-    value::{Fe2o3Symbol, Fe2o3Value},
-};
+use crate::amqp_client::fe2o3::{cbs::Fe2o3ClaimsBasedSecurity, session::Fe2o3AmqpSession};
 
 #[derive(Debug)]
 pub(crate) struct Fe2o3AmqpConnection {
@@ -62,25 +58,25 @@ impl AmqpConnection for Fe2o3AmqpConnection {
         }
         if let Some(offered_capabilities) = options.offered_capabilities {
             for capability in offered_capabilities {
-                let capability: Fe2o3Symbol = capability.into();
-                session_builder = session_builder.add_offered_capabilities(capability.0);
+                let capability: fe2o3_amqp_types::primitives::Symbol = capability.into();
+                session_builder = session_builder.add_offered_capabilities(capability);
             }
         }
         if let Some(desired_capabilities) = options.desired_capabilities {
             for capability in desired_capabilities {
-                let capability: Fe2o3Symbol = capability.into();
-                session_builder = session_builder.add_desired_capabilities(capability.0);
+                let capability: fe2o3_amqp_types::primitives::Symbol = capability.into();
+                session_builder = session_builder.add_desired_capabilities(capability);
             }
         }
         if let Some(properties) = options.properties {
             let mut fields = fe2o3_amqp::types::definitions::Fields::new();
             for property in properties.iter() {
                 debug!("Property: {:?}, Value: {:?}", property.0, property.1);
-                let k: Fe2o3Symbol = property.0.into();
-                let v: Fe2o3Value = property.1.into();
+                let k: fe2o3_amqp_types::primitives::Symbol = property.0.into();
+                let v: fe2o3_amqp_types::primitives::Value = property.1.into();
                 debug!("Property: {:?}, Value: {:?}", k, v);
 
-                fields.insert(k.0, v.0);
+                fields.insert(k, v);
             }
             session_builder = session_builder.properties(fields);
         }
