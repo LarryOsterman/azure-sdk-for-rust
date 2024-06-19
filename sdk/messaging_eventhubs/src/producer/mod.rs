@@ -2,14 +2,14 @@
 
 use crate::{
     amqp_client::{
-        value::AmqpValue, AmqpConnection, AmqpConnectionBuilder, AmqpSender, AmqpSession,
-        AmqpSessionOptions,
+        value::{AmqpOrderedMap, AmqpValue},
+        AmqpConnection, AmqpConnectionBuilder, AmqpSender, AmqpSession, AmqpSessionOptions,
     },
     common::user_agent::{
         get_package_name, get_package_version, get_platform_info, get_user_agent,
     },
     error::ErrorKind,
-    EventHubProperties, PartitionProperties,
+    EventHubPartitionProperties, EventHubProperties,
 };
 use azure_core::RetryOptions;
 use azure_core::{
@@ -181,13 +181,83 @@ impl ProducerClient {
         })
     }
 
+    fn get_entity_property<T: TryFrom<AmqpValue>>(
+        map: &AmqpOrderedMap<String, AmqpValue>,
+        property_name: &str,
+    ) -> T
+    where
+        <T as TryFrom<AmqpValue>>::Error: core::fmt::Debug,
+    {
+        TryInto::<T>::try_into(map.get(property_name.into()).unwrap().clone()).unwrap()
+    }
+
     pub async fn get_partition_properties(
         &self,
-        partition_id: &str,
-    ) -> Result<PartitionProperties> {
+        partition_id: impl Into<String>,
+    ) -> Result<EventHubPartitionProperties> {
         self.authorize_path(&self.url).await?;
         self.ensure_management_client().await?;
-        Ok(PartitionProperties::default())
+
+        let partition_id: String = partition_id.into();
+
+        let mut application_properties: AmqpOrderedMap<String, AmqpValue> = AmqpOrderedMap::new();
+        application_properties.insert("partition_id".to_string(), partition_id.into());
+        application_properties.insert("name".to_string(), self.eventhub.clone().into());
+
+        let response = self
+            .mgmt_client
+            .lock()
+            .await
+            .get()
+            .unwrap()
+            .management
+            .call(
+                "com.microsoft:eventhub",
+                self.eventhub.as_str(),
+                Some(application_properties),
+            )
+            .await?;
+
+        // Look for the required response properties
+        if !response.contains_key("name".to_string())
+            || !response.contains_key("type".to_string())
+            || !response.contains_key("partition".to_string())
+            || !response.contains_key("begin_sequence_number_epoch".to_string())
+            || !response.contains_key("begin_sequence_number".to_string())
+            || !response.contains_key("last_enqueued_sequence_number_epoch".to_string())
+            || !response.contains_key("last_enqueued_sequence_number".to_string())
+            || !response.contains_key("last_enqueued_offset".to_string())
+            || !response.contains_key("last_enqueued_time_utc".to_string())
+            || !response.contains_key("is_partition_empty".to_string())
+        {
+            return Err(ErrorKind::InvalidManagementResponse.into());
+        }
+
+        Ok(EventHubPartitionProperties {
+            beginning_sequence_number: Self::get_entity_property(
+                &response,
+                "begin_sequence_number",
+            ),
+            id: Self::get_entity_property(&response, "partition"),
+            eventhub: Self::get_entity_property(&response, "name"),
+            last_enqueued_sequence_number: Self::get_entity_property(
+                &response,
+                "last_enqueued_sequence_number",
+            ),
+            last_enqueued_offset: Self::get_entity_property::<String>(
+                &response,
+                "last_enqueued_offset",
+            )
+            .parse()
+            .unwrap(),
+            last_enqueued_time_utc: Into::<SystemTime>::into(
+                response
+                    .get("last_enqueued_time_utc".to_string())
+                    .unwrap()
+                    .clone(),
+            ),
+            is_empty: Self::get_entity_property(&response, "is_partition_empty"),
+        })
     }
 
     async fn ensure_management_client(&self) -> Result<()> {

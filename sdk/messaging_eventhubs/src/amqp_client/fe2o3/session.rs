@@ -1,8 +1,8 @@
-// cspell: words amqp
+// cspell: words amqp mgmt
 
 use super::management::Fe2o3AmqpManagement;
 use crate::amqp_client::{
-    fe2o3::error::AmqpManagementAttachError, value::AmqpValue, AmqpSenderOptions, AmqpSession,
+    fe2o3::error::AmqpManagementAttachError, messaging::AmqpTarget, AmqpSenderOptions, AmqpSession,
 };
 use async_trait::async_trait;
 use azure_core::Result;
@@ -24,7 +24,7 @@ impl AmqpSession for Fe2o3AmqpSession {
 
     async fn create_sender(
         &self,
-        target: AmqpValue,
+        target: AmqpTarget,
         options: Option<AmqpSenderOptions>,
     ) -> Result<Box<dyn crate::amqp_client::AmqpSender>> {
         todo!()

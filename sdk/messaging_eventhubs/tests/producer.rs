@@ -82,12 +82,6 @@ async fn test_get_properties() {
     let eventhub = env::var("EVENTHUB_NAME").unwrap();
 
     let credential = DefaultAzureCredential::create(TokenCredentialOptions::default()).unwrap();
-    info!("Credential: {:?}", credential);
-    let token = credential
-        .get_token(&["https://eventhubs.azure.net/.default"])
-        .await
-        .unwrap();
-    info!("Token: {:?}", token.token.secret());
 
     let client = ProducerClient::new(
         host,
@@ -102,4 +96,34 @@ async fn test_get_properties() {
     let properties = client.get_eventhub_properties().await.unwrap();
     info!("Properties: {:?}", properties);
     assert_eq!(properties.name, eventhub);
+}
+
+#[tokio::test]
+async fn test_get_partition_properties() {
+    common::setup();
+    let host = env::var("EVENTHUBS_HOST").unwrap();
+    let eventhub = env::var("EVENTHUB_NAME").unwrap();
+
+    let credential = DefaultAzureCredential::create(TokenCredentialOptions::default()).unwrap();
+
+    let client = ProducerClient::new(
+        host,
+        eventhub.clone(),
+        credential,
+        ProducerClientOptions::builder()
+            .with_application_id("test_get_properties")
+            .build(),
+    )
+    .unwrap();
+    client.open().await.unwrap();
+    let properties = client.get_eventhub_properties().await.unwrap();
+
+    for partition_id in properties.partition_ids {
+        let partition_properties = client
+            .get_partition_properties(partition_id.clone())
+            .await
+            .unwrap();
+        info!("Partition properties: {:?}", partition_properties);
+        assert_eq!(partition_properties.id, partition_id);
+    }
 }

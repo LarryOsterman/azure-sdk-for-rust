@@ -1,5 +1,4 @@
 // cspell: words eventhub eventhubs
-
 use azure_core::error::Result;
 use azure_identity::{DefaultAzureCredential, TokenCredentialOptions};
 use azure_messaging_eventhubs::producer::{ProducerClient, ProducerClientOptions};
@@ -34,5 +33,13 @@ async fn main() -> Result<()> {
     }
     let properties = client.get_eventhub_properties().await.unwrap();
     println!("Eventhub Properties for: {eventhub} {:?}", properties);
+
+    for partition in properties.partition_ids.iter() {
+        let partition_properties = client.get_partition_properties(partition).await.unwrap();
+        println!(
+            "Partition Properties for: {partition} {:?}",
+            partition_properties
+        );
+    }
     Ok(())
 }

@@ -8,13 +8,14 @@ pub mod consumer;
 pub mod error;
 pub mod producer;
 
-#[derive(Debug, Default)]
-pub struct PartitionProperties {
+#[derive(Debug)]
+pub struct EventHubPartitionProperties {
     pub id: String,
+    pub eventhub: String,
     pub beginning_sequence_number: i64,
     pub last_enqueued_sequence_number: i64,
     pub last_enqueued_offset: String,
-    pub last_enqueued_time_utc: i64,
+    pub last_enqueued_time_utc: std::time::SystemTime,
     pub is_empty: bool,
 }
 

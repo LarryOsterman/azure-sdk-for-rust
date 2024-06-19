@@ -1,4 +1,4 @@
-// cspell: words amqp servicebus
+// cspell: words amqp servicebus eventhub mgmt
 
 use crate::amqp_client::{
     fe2o3::error::AmqpManagementError,
@@ -8,6 +8,8 @@ use crate::amqp_client::{
 
 use async_trait::async_trait;
 use azure_core::error::Result;
+use fe2o3_amqp_management::operations::ReadResponse;
+use fe2o3_amqp_types::messaging::ApplicationProperties;
 use tokio::sync::Mutex;
 
 #[derive(Debug)]
@@ -45,9 +47,58 @@ impl AmqpManagement for Fe2o3AmqpManagement {
                 .await
                 .map_err(AmqpManagementError::from)?;
 
-            return Ok(response.entity_attributes.into());
+            Ok(response.entity_attributes.into())
+        } else {
+            let partition_id: String = application_properties
+                .unwrap()
+                .get("partition_id".to_string())
+                .unwrap()
+                .to_owned()
+                .into();
+            let request = GetPartitionRequest::new(entity, partition_id.as_str());
+            let response = management
+                .call(request)
+                .await
+                .map_err(AmqpManagementError::from)?;
+            Ok(response.entity_attributes.into())
         }
-
-        todo!();
     }
+}
+
+struct GetPartitionRequest {
+    eventhub: String,
+    partition_id: String,
+}
+
+impl GetPartitionRequest {
+    pub fn new(eventhub: &str, partition_id: &str) -> Self {
+        Self {
+            eventhub: eventhub.to_owned(),
+            partition_id: partition_id.to_owned(),
+        }
+    }
+}
+
+impl fe2o3_amqp_management::Request for GetPartitionRequest {
+    const OPERATION: &'static str = "READ";
+    type Response = ReadResponse;
+    type Body = ();
+
+    fn manageable_entity_type(&mut self) -> Option<String> {
+        Some("com.microsoft:partition".to_owned())
+    }
+    fn locales(&mut self) -> Option<String> {
+        None
+    }
+    fn encode_application_properties(
+        &mut self,
+    ) -> Option<fe2o3_amqp_types::messaging::ApplicationProperties> {
+        Some(
+            ApplicationProperties::builder()
+                .insert("name", self.eventhub.clone())
+                .insert("partition", self.partition_id.clone())
+                .build(),
+        )
+    }
+    fn encode_body(self) -> Self::Body {}
 }

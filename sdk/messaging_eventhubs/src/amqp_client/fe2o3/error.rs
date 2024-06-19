@@ -116,7 +116,9 @@ impl std::fmt::Display for Fe2o3AmqpError {
             ErrorKind::AmqpDeliveryRejectedError { source } => {
                 write!(f, "Delivery Rejected Error: {:?}", source.0)
             }
-            ErrorKind::AmqpOpenError { source } => write!(f, "OpenError: {:?}", source.0),
+            ErrorKind::AmqpOpenError { source } => {
+                write!(f, "Connection Open Error: {:?}", source.0)
+            }
             ErrorKind::AmqpManagementAttachError { source } => {
                 write!(f, "AttachError: {:?}", source.0)
             }
@@ -155,7 +157,7 @@ impl std::fmt::Display for Fe2o3AmqpError {
 
 impl std::fmt::Debug for Fe2o3AmqpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AmqpError: {}", self)
+        write!(f, "Fe2o3 Error: {}", self)
     }
 }
 

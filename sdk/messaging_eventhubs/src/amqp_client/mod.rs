@@ -16,6 +16,7 @@ use crate::amqp_client::{
 };
 use async_trait::async_trait;
 use azure_core::error::Result;
+use messaging::AmqpTarget;
 use std::fmt::Debug;
 use time::Duration;
 use tracing::debug;
@@ -458,7 +459,7 @@ pub trait AmqpSession: Send + Sync + Debug {
     async fn end(&self) -> Result<()>;
     async fn create_sender(
         &self,
-        target: AmqpValue,
+        target: AmqpTarget,
         options: Option<AmqpSenderOptions>,
     ) -> Result<Box<dyn AmqpSender>>;
     async fn create_management(&self, client_node_address: &str)
@@ -485,9 +486,6 @@ pub trait AmqpSender: Send + Sync + Debug {}
 
 #[cfg(test)]
 mod tests {
-
-    use fe2o3_amqp_types::messaging::IntoBody;
-
     use super::*;
 
     #[test]
