@@ -1,3 +1,4 @@
+// cspell: words eventhub eventhubs
 use azure_core::auth::TokenCredential;
 use azure_core::error::Result;
 use azure_identity::{DefaultAzureCredential, TokenCredentialOptions};

@@ -1,7 +1,9 @@
 // cspell: words amqp servicebus
 
 use crate::amqp_client::{
-    error::AmqpManagementError, value::AmqpOrderedMap, value::AmqpValue, AmqpManagement,
+    fe2o3::error::AmqpManagementError,
+    value::{AmqpOrderedMap, AmqpValue},
+    AmqpManagement,
 };
 
 use async_trait::async_trait;

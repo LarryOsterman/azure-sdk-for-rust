@@ -7,15 +7,21 @@ mod fe2o3;
 mod noop;
 
 pub mod error;
+pub mod messaging;
 pub mod value;
 
-use crate::amqp_client::value::{AmqpOrderedMap, AmqpSymbol, AmqpValue};
+use crate::amqp_client::{
+    messaging::AmqpSource,
+    value::{AmqpOrderedMap, AmqpSymbol, AmqpValue},
+};
 use async_trait::async_trait;
 use azure_core::error::Result;
-use error::AmqpOpenError;
 use std::fmt::Debug;
 use time::Duration;
 use tracing::debug;
+
+#[cfg(any(feature = "enable-fe2o3-amqp"))]
+use fe2o3::error::AmqpOpenError;
 
 #[cfg(any(feature = "enable-fe2o3-amqp"))]
 use fe2o3::connection::Fe2o3AmqpConnection;
@@ -289,15 +295,17 @@ impl AmqpSessionOptionsBuilder {
 
 #[derive(Debug)]
 pub(crate) struct AmqpSenderOptions {
-    name: Option<u32>,
-    sender_settle_mode: Option<u32>,
-    receiver_settle_mode: Option<u32>,
-    source: Option<AmqpValue>,
+    name: Option<String>,
+    sender_settle_mode: Option<SenderSettleMode>,
+    receiver_settle_mode: Option<ReceiverSettleMode>,
+    source: Option<AmqpSource>,
     offered_capabilities: Option<Vec<AmqpSymbol>>,
     desired_capabilities: Option<Vec<AmqpSymbol>>,
     properties: Option<AmqpOrderedMap<AmqpSymbol, AmqpValue>>,
     buffer_size: Option<usize>,
     role: Option<AmqpValue>,
+    initial_delivery_count: Option<u32>,
+    max_message_size: Option<u64>,
 }
 
 impl AmqpSenderOptions {
@@ -306,16 +314,31 @@ impl AmqpSenderOptions {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+enum SenderSettleMode {
+    Unsettled = 0,
+    Settled = 1,
+    Mixed = 2,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum ReceiverSettleMode {
+    First = 0,
+    Second = 1,
+}
+
 pub(crate) struct AmqpSenderOptionsBuilder {
-    name: Option<u32>,
-    sender_settle_mode: Option<u32>,
-    receiver_settle_mode: Option<u32>,
-    source: Option<AmqpValue>,
+    name: Option<String>,
+    sender_settle_mode: Option<SenderSettleMode>,
+    receiver_settle_mode: Option<ReceiverSettleMode>,
+    source: Option<AmqpSource>,
     offered_capabilities: Option<Vec<AmqpSymbol>>,
     desired_capabilities: Option<Vec<AmqpSymbol>>,
     properties: Option<AmqpOrderedMap<AmqpSymbol, AmqpValue>>,
     buffer_size: Option<usize>,
     role: Option<AmqpValue>,
+    initial_delivery_count: Option<u32>,
+    max_message_size: Option<u64>,
 }
 
 impl AmqpSenderOptionsBuilder {
@@ -330,27 +353,29 @@ impl AmqpSenderOptionsBuilder {
             properties: None,
             buffer_size: None,
             role: None,
+            initial_delivery_count: None,
+            max_message_size: None,
         }
     }
-    pub fn with_name(self, name: u32) -> Self {
+    pub fn with_name(self, name: impl Into<String>) -> Self {
         Self {
-            name: Some(name),
+            name: Some(name.into()),
             ..self
         }
     }
-    pub fn with_sender_settle_mode(self, sender_settle_mode: u32) -> Self {
+    pub fn with_sender_settle_mode(self, sender_settle_mode: SenderSettleMode) -> Self {
         Self {
             sender_settle_mode: Some(sender_settle_mode),
             ..self
         }
     }
-    pub fn with_receiver_settle_mode(self, receiver_settle_mode: u32) -> Self {
+    pub fn with_receiver_settle_mode(self, receiver_settle_mode: ReceiverSettleMode) -> Self {
         Self {
             receiver_settle_mode: Some(receiver_settle_mode),
             ..self
         }
     }
-    pub fn with_source(self, source: AmqpValue) -> Self {
+    pub fn with_source(self, source: AmqpSource) -> Self {
         Self {
             source: Some(source),
             ..self
@@ -390,6 +415,18 @@ impl AmqpSenderOptionsBuilder {
             ..self
         }
     }
+    pub fn with_initial_delivery_count(self, initial_delivery_count: u32) -> Self {
+        Self {
+            initial_delivery_count: Some(initial_delivery_count),
+            ..self
+        }
+    }
+    pub fn with_max_message_size(self, max_message_size: u64) -> Self {
+        Self {
+            max_message_size: Some(max_message_size),
+            ..self
+        }
+    }
 
     pub fn build(self) -> AmqpSenderOptions {
         AmqpSenderOptions {
@@ -402,6 +439,8 @@ impl AmqpSenderOptionsBuilder {
             properties: self.properties,
             buffer_size: self.buffer_size,
             role: self.role,
+            initial_delivery_count: self.initial_delivery_count,
+            max_message_size: self.max_message_size,
         }
     }
 }
@@ -447,11 +486,13 @@ pub trait AmqpSender: Send + Sync + Debug {}
 #[cfg(test)]
 mod tests {
 
+    use fe2o3_amqp_types::messaging::IntoBody;
+
     use super::*;
 
-    #[tokio::test]
-    async fn test_amqp_connection_builder() {
-        let _builder = AmqpConnectionBuilder::new()
+    #[test]
+    fn test_amqp_connection_builder() {
+        let builder = AmqpConnectionBuilder::new()
             .with_max_frame_size(1024)
             .with_channel_max(16)
             .with_idle_timeout(time::Duration::seconds(60))
@@ -461,5 +502,94 @@ mod tests {
             .with_desired_capabilities(vec!["capability".into()])
             .with_properties(vec![("key", "value")])
             .with_buffer_size(1024);
+
+        let _connection = builder.open("id", url::Url::parse("amqp://localhost").unwrap());
+    }
+
+    #[test]
+    fn test_amqp_session_options_builder() {
+        let builder = AmqpSessionOptions::builder()
+            .with_next_outgoing_id(1)
+            .with_incoming_window(1)
+            .with_outgoing_window(1)
+            .with_handle_max(1)
+            .with_offered_capabilities(vec!["capability".into()])
+            .with_desired_capabilities(vec!["capability".into()])
+            .with_properties(vec![("key", "value")])
+            .with_buffer_size(1024);
+
+        let session_options = builder.build();
+        assert_eq!(session_options.next_outgoing_id, Some(1));
+        assert_eq!(session_options.incoming_window, Some(1));
+        assert_eq!(session_options.outgoing_window, Some(1));
+        assert_eq!(session_options.handle_max, Some(1));
+        assert_eq!(
+            session_options.offered_capabilities,
+            Some(vec!["capability".into()])
+        );
+        assert_eq!(
+            session_options.desired_capabilities,
+            Some(vec!["capability".into()])
+        );
+        assert!(session_options.properties.is_some());
+        let properties = session_options.properties.clone().unwrap();
+        assert!(properties.contains_key("key".into()));
+        assert_eq!(
+            *properties.get("key".into()).unwrap(),
+            AmqpValue::String("value".to_string())
+        );
+
+        assert_eq!(session_options.buffer_size, Some(1024));
+    }
+
+    #[test]
+    fn test_amqp_sender_options_builder() {
+        let builder = AmqpSenderOptions::builder()
+            .with_name("name".to_string())
+            .with_sender_settle_mode(SenderSettleMode::Mixed)
+            .with_receiver_settle_mode(ReceiverSettleMode::First)
+            .with_source(AmqpSource::builder().with_address("address").build())
+            .with_offered_capabilities(vec!["capability".into()])
+            .with_desired_capabilities(vec!["capability".into()])
+            .with_properties(vec![("key", "value")])
+            .with_buffer_size(1024)
+            .with_initial_delivery_count(27)
+            .with_max_message_size(1024)
+            .with_role(AmqpValue::String("role".to_string()));
+
+        let sender_options = builder.build();
+        assert_eq!(sender_options.name, Some("name".to_string()));
+        assert_eq!(
+            sender_options.sender_settle_mode,
+            Some(SenderSettleMode::Mixed)
+        );
+        assert_eq!(
+            sender_options.receiver_settle_mode,
+            Some(ReceiverSettleMode::First)
+        );
+        assert_eq!(
+            sender_options.offered_capabilities,
+            Some(vec!["capability".into()])
+        );
+        assert_eq!(
+            sender_options.desired_capabilities,
+            Some(vec!["capability".into()])
+        );
+        assert!(sender_options.properties.is_some());
+        let properties = sender_options.properties.clone().unwrap();
+        assert!(properties.contains_key("key".into()));
+        assert_eq!(
+            *properties.get("key".into()).unwrap(),
+            AmqpValue::String("value".to_string())
+        );
+
+        assert_eq!(sender_options.initial_delivery_count, Some(27));
+        assert_eq!(sender_options.max_message_size, Some(1024));
+
+        assert_eq!(sender_options.buffer_size, Some(1024));
+        assert_eq!(
+            sender_options.role,
+            Some(AmqpValue::String("role".to_string()))
+        );
     }
 }

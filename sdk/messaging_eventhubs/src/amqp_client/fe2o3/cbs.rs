@@ -2,7 +2,8 @@
 
 use std::borrow::BorrowMut;
 
-use crate::amqp_client::{error::AmqpManagementError, AmqpClaimsBasedSecurity};
+use crate::amqp_client::fe2o3::error::AmqpManagementError;
+use crate::amqp_client::AmqpClaimsBasedSecurity;
 use async_trait::async_trait;
 use azure_core::error::Result;
 use fe2o3_amqp_cbs::token::CbsToken;

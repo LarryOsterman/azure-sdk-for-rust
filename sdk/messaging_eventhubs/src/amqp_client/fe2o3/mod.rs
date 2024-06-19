@@ -1,5 +1,6 @@
 pub mod cbs;
 pub mod connection;
+pub mod error;
 pub mod management;
 pub mod sender;
 pub mod session;

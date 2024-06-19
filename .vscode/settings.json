@@ -2,5 +2,8 @@
     "editor.formatOnSave": true,
     "rust-analyzer.cargo.features": [
         "test_e2e"
+    ],
+    "vscode-nmake-tools.workspaceBuildDirectories": [
+        "."
     ]
 }

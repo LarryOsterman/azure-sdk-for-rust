@@ -1,8 +1,10 @@
 // cspell: words amqp widnow eventhubs
 
-use crate::amqp_client::error::{AmqpBeginError, AmqpManagementAttachError};
+use crate::amqp_client::fe2o3::error::{
+    AmqpBeginError, AmqpConnectionError, AmqpManagementAttachError,
+};
+use crate::amqp_client::AmqpConnection;
 use crate::amqp_client::AmqpSessionOptions;
-use crate::amqp_client::{error::AmqpConnectionError, AmqpConnection};
 
 use async_trait::async_trait;
 use azure_core::Result;

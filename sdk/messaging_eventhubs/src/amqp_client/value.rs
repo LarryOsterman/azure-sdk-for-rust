@@ -303,6 +303,7 @@ mod tests {
         assert_eq!(v23, AmqpValue::Unknown);
     }
 
+    #[test]
     fn test_value_implicit() {
         {
             let v: AmqpValue = true.into();

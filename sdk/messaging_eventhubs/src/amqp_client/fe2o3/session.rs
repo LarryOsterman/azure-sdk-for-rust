@@ -2,7 +2,7 @@
 
 use super::management::Fe2o3AmqpManagement;
 use crate::amqp_client::{
-    error::AmqpManagementAttachError, value::AmqpValue, AmqpSenderOptions, AmqpSession,
+    fe2o3::error::AmqpManagementAttachError, value::AmqpValue, AmqpSenderOptions, AmqpSession,
 };
 use async_trait::async_trait;
 use azure_core::Result;
