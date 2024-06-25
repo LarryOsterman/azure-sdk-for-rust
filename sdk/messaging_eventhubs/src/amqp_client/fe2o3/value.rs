@@ -3,7 +3,7 @@
 use serde_bytes::ByteBuf;
 use std::time::UNIX_EPOCH;
 
-use serde_amqp::{descriptor, primitives::Timestamp};
+use serde_amqp::primitives::Timestamp;
 
 use crate::amqp_client::value::{
     AmqpDescribed, AmqpDescriptor, AmqpList, AmqpOrderedMap, AmqpSymbol, AmqpValue,
@@ -154,7 +154,6 @@ impl From<fe2o3_amqp_types::primitives::Value> for AmqpValue {
                     serde_amqp::descriptor::Descriptor::Name(symbol) => {
                         AmqpDescriptor::Name(symbol.into())
                     }
-                    _ => todo!(),
                 };
                 AmqpValue::Described(Box::new(AmqpDescribed { descriptor, value }))
             }

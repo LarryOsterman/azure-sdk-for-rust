@@ -1,19 +1,19 @@
-// cspell: words amqp widnow eventhubs
+// cspell: words amqp widnow eventhubs sasl
 
-use crate::amqp_client::fe2o3::error::{
-    AmqpBeginError, AmqpConnectionError, AmqpManagementAttachError,
+use crate::amqp_client::{
+    cbs::AmqpClaimsBasedSecurity,
+    connection::{AmqpConnectionOptions, AmqpConnectionTrait},
+    fe2o3::error::{AmqpBeginError, AmqpConnectionError, AmqpManagementAttachError},
 };
-use crate::amqp_client::AmqpConnection;
-use crate::amqp_client::AmqpSessionOptions;
 
-use async_trait::async_trait;
 use azure_core::Result;
 use fe2o3_amqp::connection::ConnectionHandle;
+use log::debug;
 use std::{borrow::BorrowMut, sync::OnceLock};
 use tokio::sync::Mutex;
-use tracing::debug;
+use url::Url;
 
-use crate::amqp_client::fe2o3::{cbs::Fe2o3ClaimsBasedSecurity, session::Fe2o3AmqpSession};
+use super::{cbs::Fe2o3ClaimsBasedSecurity, error::AmqpOpenError};
 
 #[derive(Debug)]
 pub(crate) struct Fe2o3AmqpConnection {
@@ -23,17 +23,91 @@ pub(crate) struct Fe2o3AmqpConnection {
 unsafe impl Sync for Fe2o3AmqpConnection {}
 
 impl Fe2o3AmqpConnection {
-    pub(crate) fn new(connection: fe2o3_amqp::connection::ConnectionHandle<()>) -> Self {
-        let connection_cell = OnceLock::new();
-        connection_cell.set(Mutex::new(connection)).unwrap();
+    pub(crate) fn new() -> Self {
         Self {
-            connection: connection_cell,
+            connection: OnceLock::new(),
         }
+    }
+
+    pub(crate) fn get(&self) -> &OnceLock<Mutex<ConnectionHandle<()>>> {
+        &self.connection
     }
 }
 
-#[async_trait]
-impl AmqpConnection for Fe2o3AmqpConnection {
+impl AmqpConnectionTrait for Fe2o3AmqpConnection {
+    async fn open(
+        &self,
+        id: impl Into<String>,
+        url: Url,
+        options: Option<AmqpConnectionOptions>,
+    ) -> Result<()> {
+        {
+            // All AMQP clients have a similar set of options.
+            let mut builder = fe2o3_amqp::Connection::builder()
+                .sasl_profile(fe2o3_amqp::sasl_profile::SaslProfile::Anonymous)
+                .alt_tls_establishment(true)
+                .container_id(id)
+                .max_frame_size(65536);
+
+            if options.is_some() {
+                let options = options.unwrap();
+                if options.max_frame_size.is_some() {
+                    builder = builder.max_frame_size(options.max_frame_size.unwrap());
+                }
+                if options.channel_max.is_some() {
+                    builder = builder.channel_max(options.channel_max.unwrap());
+                }
+                if options.idle_timeout.is_some() {
+                    builder = builder
+                        .idle_time_out(options.idle_timeout.unwrap().whole_milliseconds() as u32);
+                }
+                if options.outgoing_locales.is_some() {
+                    for locale in options.outgoing_locales.as_ref().unwrap() {
+                        builder = builder.add_outgoing_locales(locale.as_str());
+                    }
+                }
+                if options.incoming_locales.is_some() {
+                    for locale in options.incoming_locales.as_ref().unwrap() {
+                        builder = builder.add_incoming_locales(locale.as_str());
+                    }
+                }
+                if options.offered_capabilities.is_some() {
+                    for capability in options.offered_capabilities.unwrap() {
+                        let capability: fe2o3_amqp_types::primitives::Symbol = capability.into();
+                        builder = builder.add_offered_capabilities(capability);
+                    }
+                }
+                if options.desired_capabilities.is_some() {
+                    for capability in options.desired_capabilities.unwrap() {
+                        let capability: fe2o3_amqp_types::primitives::Symbol = capability.into();
+                        builder = builder.add_desired_capabilities(capability);
+                    }
+                }
+                if options.properties.is_some() {
+                    let mut fields = fe2o3_amqp::types::definitions::Fields::new();
+                    for property in options.properties.unwrap().iter() {
+                        debug!("Property: {:?}, Value: {:?}", property.0, property.1);
+                        let k: fe2o3_amqp_types::primitives::Symbol = property.0.into();
+                        let v: fe2o3_amqp_types::primitives::Value = property.1.into();
+                        debug!("Property2: {:?}, Value: {:?}", k, v);
+
+                        fields.insert(k, v);
+                    }
+                    builder = builder.properties(fields);
+                }
+                if options.buffer_size.is_some() {
+                    builder = builder.buffer_size(options.buffer_size.unwrap());
+                }
+            }
+            self.connection
+                .set(Mutex::new(
+                    builder.open(url).await.map_err(AmqpOpenError::from)?,
+                ))
+                .unwrap();
+            Ok(())
+        }
+    }
+
     async fn close(&self) -> Result<()> {
         let mut connection = self.connection.get().unwrap().lock().await;
         connection
@@ -43,59 +117,13 @@ impl AmqpConnection for Fe2o3AmqpConnection {
             .map_err(AmqpConnectionError::from)?;
         Ok(())
     }
+    // async fn create_session(&self, options: AmqpSessionOptions) -> Result<AmqpSession> {
+    //     Ok(AmqpSession::new(
+    //         Fe2o3AmqpSession::new(self, options).await?,
+    //     ))
+    // }
 
-    async fn create_session(
-        &self,
-        options: AmqpSessionOptions,
-    ) -> Result<Box<dyn crate::amqp_client::AmqpSession>> {
-        let mut session_builder = fe2o3_amqp::session::Session::builder();
-        if let Some(incoming_window) = options.incoming_window {
-            session_builder = session_builder.incoming_window(incoming_window);
-        }
-        if let Some(outgoing_window) = options.outgoing_window {
-            session_builder = session_builder.outgoing_widnow(outgoing_window);
-        }
-        if let Some(handle_max) = options.handle_max {
-            session_builder = session_builder.handle_max(handle_max);
-        }
-        if let Some(offered_capabilities) = options.offered_capabilities {
-            for capability in offered_capabilities {
-                let capability: fe2o3_amqp_types::primitives::Symbol = capability.into();
-                session_builder = session_builder.add_offered_capabilities(capability);
-            }
-        }
-        if let Some(desired_capabilities) = options.desired_capabilities {
-            for capability in desired_capabilities {
-                let capability: fe2o3_amqp_types::primitives::Symbol = capability.into();
-                session_builder = session_builder.add_desired_capabilities(capability);
-            }
-        }
-        if let Some(properties) = options.properties {
-            let mut fields = fe2o3_amqp::types::definitions::Fields::new();
-            for property in properties.iter() {
-                debug!("Property: {:?}, Value: {:?}", property.0, property.1);
-                let k: fe2o3_amqp_types::primitives::Symbol = property.0.into();
-                let v: fe2o3_amqp_types::primitives::Value = property.1.into();
-                debug!("Property: {:?}, Value: {:?}", k, v);
-
-                fields.insert(k, v);
-            }
-            session_builder = session_builder.properties(fields);
-        }
-        if let Some(buffer_size) = options.buffer_size {
-            session_builder = session_builder.buffer_size(buffer_size);
-        }
-
-        let session = session_builder
-            .begin(self.connection.get().unwrap().lock().await.borrow_mut())
-            .await
-            .map_err(AmqpBeginError::from)?;
-        Ok(Box::new(Fe2o3AmqpSession::new(session)))
-    }
-
-    async fn create_claims_based_security(
-        &self,
-    ) -> Result<Box<dyn crate::amqp_client::AmqpClaimsBasedSecurity>> {
+    async fn create_claims_based_security(&self) -> Result<AmqpClaimsBasedSecurity> {
         let mut connection = self.connection.get().unwrap().lock().await;
         let mut session = fe2o3_amqp::session::Session::begin(connection.borrow_mut())
             .await
@@ -107,6 +135,87 @@ impl AmqpConnection for Fe2o3AmqpConnection {
             .await
             .map_err(AmqpManagementAttachError::from)?;
 
-        Ok(Box::new(Fe2o3ClaimsBasedSecurity::new(cbs_client, session)))
+        Ok(AmqpClaimsBasedSecurity::new(Fe2o3ClaimsBasedSecurity::new(
+            cbs_client, session,
+        )))
     }
 }
+
+// #[async_trait]
+// impl AmqpConnection for Fe2o3AmqpConnection {
+//     async fn close(&self) -> Result<()> {
+//         let mut connection = self.connection.get().unwrap().lock().await;
+//         connection
+//             .borrow_mut()
+//             .close()
+//             .await
+//             .map_err(AmqpConnectionError::from)?;
+//         Ok(())
+//     }
+
+//     async fn create_session(
+//         &self,
+//         options: AmqpSessionOptions,
+//     ) -> Result<Box<dyn crate::amqp_client::AmqpSession>> {
+//         let mut session_builder = fe2o3_amqp::session::Session::builder();
+//         if let Some(incoming_window) = options.incoming_window {
+//             session_builder = session_builder.incoming_window(incoming_window);
+//         }
+//         if let Some(outgoing_window) = options.outgoing_window {
+//             session_builder = session_builder.outgoing_widnow(outgoing_window);
+//         }
+//         if let Some(handle_max) = options.handle_max {
+//             session_builder = session_builder.handle_max(handle_max);
+//         }
+//         if let Some(offered_capabilities) = options.offered_capabilities {
+//             for capability in offered_capabilities {
+//                 let capability: fe2o3_amqp_types::primitives::Symbol = capability.into();
+//                 session_builder = session_builder.add_offered_capabilities(capability);
+//             }
+//         }
+//         if let Some(desired_capabilities) = options.desired_capabilities {
+//             for capability in desired_capabilities {
+//                 let capability: fe2o3_amqp_types::primitives::Symbol = capability.into();
+//                 session_builder = session_builder.add_desired_capabilities(capability);
+//             }
+//         }
+//         if let Some(properties) = options.properties {
+//             let mut fields = fe2o3_amqp::types::definitions::Fields::new();
+//             for property in properties.iter() {
+//                 debug!("Property: {:?}, Value: {:?}", property.0, property.1);
+//                 let k: fe2o3_amqp_types::primitives::Symbol = property.0.into();
+//                 let v: fe2o3_amqp_types::primitives::Value = property.1.into();
+//                 debug!("Property: {:?}, Value: {:?}", k, v);
+
+//                 fields.insert(k, v);
+//             }
+//             session_builder = session_builder.properties(fields);
+//         }
+//         if let Some(buffer_size) = options.buffer_size {
+//             session_builder = session_builder.buffer_size(buffer_size);
+//         }
+
+//         let session = session_builder
+//             .begin(self.connection.get().unwrap().lock().await.borrow_mut())
+//             .await
+//             .map_err(AmqpBeginError::from)?;
+//         Ok(Box::new(Fe2o3AmqpSession::new(session)))
+//     }
+
+//     async fn create_claims_based_security(
+//         &self,
+//     ) -> Result<Box<dyn crate::amqp_client::AmqpClaimsBasedSecurity>> {
+//         let mut connection = self.connection.get().unwrap().lock().await;
+//         let mut session = fe2o3_amqp::session::Session::begin(connection.borrow_mut())
+//             .await
+//             .map_err(AmqpBeginError::from)?;
+
+//         let cbs_client = fe2o3_amqp_cbs::client::CbsClient::builder()
+//             .client_node_addr("rust_eventhubs_cbs")
+//             .attach(&mut session)
+//             .await
+//             .map_err(AmqpManagementAttachError::from)?;
+
+//         Ok(Box::new(Fe2o3ClaimsBasedSecurity::new(cbs_client, session)))
+//     }
+// }

@@ -1,10 +1,10 @@
 //#![cfg(all(test, feature = "test_e2e"))] // to run this, do: `cargo test --features test_e2e`
 //cspell: words eventhubs eventhub
-use azure_core::auth::TokenCredential;
+
 use azure_identity::{DefaultAzureCredential, TokenCredentialOptions};
 use azure_messaging_eventhubs::producer::{ProducerClient, ProducerClientOptions};
+use log::{debug, info};
 use std::env;
-use tracing::{event, info};
 
 mod common;
 
@@ -38,7 +38,7 @@ async fn test_new_with_error() {
     .unwrap();
     let result = producer.open().await;
     assert!(result.is_err());
-    event!(tracing::Level::INFO, "Error: {:?}", result);
+    info!("Error: {:?}", result);
 }
 
 #[tokio::test]

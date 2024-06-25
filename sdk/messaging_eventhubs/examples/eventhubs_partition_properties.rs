@@ -4,8 +4,8 @@ use azure_identity::{DefaultAzureCredential, TokenCredentialOptions};
 use azure_messaging_eventhubs::producer::{ProducerClient, ProducerClientOptions};
 
 use env_logger;
+use log::info;
 use std::env;
-use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {

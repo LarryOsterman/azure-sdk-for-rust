@@ -1,5 +1,5 @@
 //cspell: words amqp eventhub
-use crate::amqp_client::AmqpConnection;
+use crate::amqp_client::connection::AmqpConnection;
 use azure_core::RetryOptions;
 
 pub struct ConsumerClientOptions {
@@ -55,7 +55,7 @@ impl ConsumerClientOptionsBuilder {
 }
 
 pub struct EventHubsConsumerClient {
-    _connection: Box<dyn AmqpConnection>,
+    _connection: AmqpConnection,
     _consumer_group: String,
     _eventhub_name: String,
     _consumer_name: String,

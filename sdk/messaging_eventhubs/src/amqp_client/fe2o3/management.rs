@@ -1,46 +1,62 @@
 // cspell: words amqp servicebus eventhub mgmt
 
+use std::borrow::BorrowMut;
+
 use crate::amqp_client::{
     fe2o3::error::AmqpManagementError,
+    management::AmqpManagementTrait,
     value::{AmqpOrderedMap, AmqpValue},
-    AmqpManagement,
 };
 
-use async_trait::async_trait;
 use azure_core::error::Result;
 use fe2o3_amqp_management::operations::ReadResponse;
 use fe2o3_amqp_types::messaging::ApplicationProperties;
+use log::trace;
 use tokio::sync::Mutex;
+
+use super::{error::AmqpManagementAttachError, session::Fe2o3AmqpSession};
 
 #[derive(Debug)]
 pub(crate) struct Fe2o3AmqpManagement {
     management: Mutex<fe2o3_amqp_management::MgmtClient>,
 }
 
-unsafe impl Send for Fe2o3AmqpManagement {}
-unsafe impl Sync for Fe2o3AmqpManagement {}
-
 impl Fe2o3AmqpManagement {
-    pub(crate) fn new(management: fe2o3_amqp_management::MgmtClient) -> Self {
-        Self {
+    pub(crate) async fn new(
+        session: &Fe2o3AmqpSession,
+        client_node_name: impl Into<String>,
+    ) -> Result<Self> {
+        let mut session = session.get().lock().await;
+
+        let management = fe2o3_amqp_management::client::MgmtClient::builder()
+            .client_node_addr(client_node_name)
+            //            .management_node_address("$management")
+            .attach(session.borrow_mut())
+            .await
+            .map_err(AmqpManagementAttachError::from)?;
+        Ok(Self {
             management: Mutex::new(management),
-        }
+        })
     }
 }
 
-#[async_trait]
-impl AmqpManagement for Fe2o3AmqpManagement {
+impl AmqpManagementTrait for Fe2o3AmqpManagement {
     async fn call(
         &self,
-        operation_type: &str,
-        entity: &str,
+        operation_type: impl Into<String>,
+        entity: impl Into<String>,
         application_properties: Option<AmqpOrderedMap<String, AmqpValue>>,
     ) -> Result<AmqpOrderedMap<String, AmqpValue>> {
         let mut management = self.management.lock().await;
 
         if application_properties.is_none() {
-            let request =
-                fe2o3_amqp_management::operations::ReadRequest::name(entity, operation_type, None);
+            let request = fe2o3_amqp_management::operations::ReadRequest::name(
+                entity.into(),
+                operation_type.into(),
+                None,
+            );
+
+            trace!("Request: {:?}", request);
 
             let response = management
                 .call(request)
@@ -55,7 +71,7 @@ impl AmqpManagement for Fe2o3AmqpManagement {
                 .unwrap()
                 .to_owned()
                 .into();
-            let request = GetPartitionRequest::new(entity, partition_id.as_str());
+            let request = GetPartitionRequest::new(entity, partition_id);
             let response = management
                 .call(request)
                 .await
@@ -71,10 +87,10 @@ struct GetPartitionRequest {
 }
 
 impl GetPartitionRequest {
-    pub fn new(eventhub: &str, partition_id: &str) -> Self {
+    pub fn new(eventhub: impl Into<String>, partition_id: impl Into<String>) -> Self {
         Self {
-            eventhub: eventhub.to_owned(),
-            partition_id: partition_id.to_owned(),
+            eventhub: eventhub.into(),
+            partition_id: partition_id.into(),
         }
     }
 }

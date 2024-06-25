@@ -1,11 +1,14 @@
 // cspell: words amqp mgmt
 
-use super::management::Fe2o3AmqpManagement;
+use super::error::AmqpBeginError;
 use crate::amqp_client::{
-    fe2o3::error::AmqpManagementAttachError, messaging::AmqpTarget, AmqpSenderOptions, AmqpSession,
+    connection::AmqpConnection,
+    messaging::AmqpTarget,
+    sender::{AmqpSender, AmqpSenderOptions},
+    session::{AmqpSessionOptions, AmqpSessionTrait},
 };
-use async_trait::async_trait;
 use azure_core::Result;
+use log::debug;
 use std::{borrow::BorrowMut, sync::OnceLock};
 use tokio::sync::Mutex;
 
@@ -16,42 +19,84 @@ pub(crate) struct Fe2o3AmqpSession {
 
 unsafe impl Sync for Fe2o3AmqpSession {}
 
-#[async_trait]
-impl AmqpSession for Fe2o3AmqpSession {
+impl Fe2o3AmqpSession {
+    pub(crate) fn new() -> Self {
+        Self {
+            session: OnceLock::new(),
+        }
+    }
+
+    pub(crate) fn get(&self) -> &Mutex<fe2o3_amqp::session::SessionHandle<()>> {
+        &self.session.get().unwrap()
+    }
+}
+
+impl AmqpSessionTrait for Fe2o3AmqpSession {
+    async fn begin(
+        &self,
+        connection: &AmqpConnection,
+        options: Option<AmqpSessionOptions>,
+    ) -> Result<()> {
+        let mut connection = connection.0 .0.get().get().unwrap().lock().await;
+
+        let mut session_builder = fe2o3_amqp::session::Session::builder();
+        if options.is_some() {
+            let options = options.unwrap();
+
+            if let Some(incoming_window) = options.incoming_window {
+                session_builder = session_builder.incoming_window(incoming_window);
+            }
+            if let Some(outgoing_window) = options.outgoing_window {
+                session_builder = session_builder.outgoing_widnow(outgoing_window);
+            }
+            if let Some(handle_max) = options.handle_max {
+                session_builder = session_builder.handle_max(handle_max);
+            }
+            if let Some(offered_capabilities) = options.offered_capabilities.clone() {
+                for capability in offered_capabilities {
+                    let capability: fe2o3_amqp_types::primitives::Symbol = capability.into();
+                    session_builder = session_builder.add_offered_capabilities(capability);
+                }
+            }
+            if let Some(desired_capabilities) = options.desired_capabilities.clone() {
+                for capability in desired_capabilities {
+                    let capability: fe2o3_amqp_types::primitives::Symbol = capability.into();
+                    session_builder = session_builder.add_desired_capabilities(capability);
+                }
+            }
+            if let Some(properties) = options.properties.clone() {
+                let mut fields = fe2o3_amqp::types::definitions::Fields::new();
+                for property in properties.iter() {
+                    debug!("Property: {:?}, Value: {:?}", property.0, property.1);
+                    let k: fe2o3_amqp_types::primitives::Symbol = property.0.into();
+                    let v: fe2o3_amqp_types::primitives::Value = property.1.into();
+                    debug!("Property: {:?}, Value: {:?}", k, v);
+
+                    fields.insert(k, v);
+                }
+                session_builder = session_builder.properties(fields);
+            }
+            if let Some(buffer_size) = options.buffer_size {
+                session_builder = session_builder.buffer_size(buffer_size);
+            }
+        }
+        let session = session_builder
+            .begin(connection.borrow_mut())
+            .await
+            .map_err(AmqpBeginError::from)?;
+        self.session.set(Mutex::new(session)).unwrap();
+        Ok(())
+    }
+
     async fn end(&self) -> Result<()> {
         todo!()
     }
 
     async fn create_sender(
         &self,
-        target: AmqpTarget,
+        target: impl Into<AmqpTarget>,
         options: Option<AmqpSenderOptions>,
-    ) -> Result<Box<dyn crate::amqp_client::AmqpSender>> {
+    ) -> Result<AmqpSender> {
         todo!()
-    }
-
-    async fn create_management(
-        &self,
-        client_node_name: &str,
-    ) -> Result<Box<dyn crate::amqp_client::AmqpManagement>> {
-        let mut session = self.session.get().unwrap().lock().await;
-
-        let management = fe2o3_amqp_management::client::MgmtClient::builder()
-            .client_node_addr(client_node_name)
-            .management_node_address("$management")
-            .attach(session.borrow_mut())
-            .await
-            .map_err(|err| AmqpManagementAttachError(err))?;
-        Ok(Box::new(Fe2o3AmqpManagement::new(management)))
-    }
-}
-
-impl Fe2o3AmqpSession {
-    pub(crate) fn new(session: fe2o3_amqp::session::SessionHandle<()>) -> Self {
-        let session_once_lock = OnceLock::new();
-        session_once_lock.set(Mutex::new(session)).unwrap();
-        Self {
-            session: session_once_lock,
-        }
     }
 }

@@ -1,59 +1,109 @@
 // cspell: words amqp
 
-use std::sync::Arc;
+use super::sender::AmqpSenderOptions;
+use super::session::AmqpSessionOptions;
+use crate::amqp_client::messaging::{AmqpMessage, AmqpTarget};
+use crate::amqp_client::value::{AmqpOrderedMap, AmqpValue};
+use azure_core::error::Result;
 
 #[derive(Debug)]
-struct NoopAmqpConnectionBuilder;
+pub(crate) struct NoopAmqpConnection {}
 
-pub(crate) fn noop_amqp_connection_builder() -> Arc<dyn crate::amqp_client::AmqpConnectionBuilder> {
-    Arc::new(NoopAmqpConnectionBuilder)
+#[derive(Debug)]
+pub(crate) struct NoopAmqpManagement {}
+
+#[derive(Debug)]
+pub(crate) struct NoopAmqpSender {}
+
+#[derive(Debug)]
+pub(crate) struct NoopAmqpSession {}
+
+#[derive(Debug)]
+pub(crate) struct NoopAmqpClaimsBasedSecurity {}
+
+impl NoopAmqpConnection {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+    pub(crate) async fn close(&self) -> Result<()> {
+        todo!()
+    }
+    pub(crate) async fn create_session(
+        &self,
+        options: AmqpSessionOptions,
+    ) -> Result<NoopAmqpSession> {
+        Ok(NoopAmqpSession {})
+    }
+
+    pub(crate) async fn create_claims_based_security(&self) -> Result<NoopAmqpClaimsBasedSecurity> {
+        Ok(NoopAmqpClaimsBasedSecurity {})
+    }
 }
-impl crate::amqp_client::AmqpConnectionBuilder for NoopAmqpConnectionBuilder {
-    async fn open(self) -> std::sync::Arc<dyn super::AmqpConnection> {
+
+impl NoopAmqpSession {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+
+    pub(crate) async fn create_sender(
+        &self,
+        target: AmqpTarget,
+        options: Option<AmqpSenderOptions>,
+    ) -> Result<NoopAmqpSender> {
+        Ok(NoopAmqpSender {})
+    }
+
+    pub(crate) async fn create_management(
+        &self,
+        _client_node_name: &str,
+    ) -> Result<NoopAmqpManagement> {
+        Ok(NoopAmqpManagement {})
+    }
+
+    pub(crate) async fn end(&self) -> Result<()> {
+        todo!()
+    }
+}
+
+impl NoopAmqpClaimsBasedSecurity {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+    pub(crate) async fn authorize_path(
+        &self,
+        _path: &str,
+        _secret: &str,
+        _expires_on: i64,
+    ) -> Result<()> {
+        todo!()
+    }
+}
+
+impl NoopAmqpManagement {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+
+    pub(crate) async fn call(
+        &self,
+        _operation_type: String,
+        _entity: String,
+        _application_properties: Option<AmqpOrderedMap<String, AmqpValue>>,
+    ) -> Result<AmqpOrderedMap<String, AmqpValue>> {
+        todo!()
+    }
+}
+
+impl NoopAmqpSender {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+
+    pub(crate) fn max_message_size(&self) -> Option<u64> {
         todo!()
     }
 
-    fn with_uri(self, uri: impl Into<String>) -> Self {
-        todo!()
-    }
-
-    fn with_container_id(self, container_id: impl Into<String>) -> Self {
-        todo!()
-    }
-
-    fn with_max_frame_size(self, max_frame_size: u32) -> Self {
-        todo!()
-    }
-
-    fn with_channel_max(self, channel_max: u16) -> Self {
-        todo!()
-    }
-
-    fn with_idle_timeout(self, idle_timeout: time::convert::Millisecond) -> Self {
-        todo!()
-    }
-
-    fn with_outgoing_locales(self, outgoing_locales: Vec<String>) -> Self {
-        todo!()
-    }
-
-    fn with_incoming_locales(self, incoming_locales: Vec<String>) -> Self {
-        todo!()
-    }
-
-    fn with_offered_capabilities(self, offered_capabilities: Vec<String>) -> Self {
-        todo!()
-    }
-
-    fn with_desired_capabilities(self, desired_capabilities: Vec<String>) -> Self {
-        todo!()
-    }
-
-    fn with_properties(self, properties: Vec<(String, String)>) -> Self {
-        todo!()
-    }
-
-    fn with_buffer_size(self, buffer_size: usize) -> Self {
+    pub(crate) async fn send(&self, _message: AmqpMessage) -> Result<()> {
         todo!()
     }
 }

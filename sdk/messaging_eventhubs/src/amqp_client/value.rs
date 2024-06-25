@@ -68,10 +68,14 @@ where
         self.inner.push((key, value));
     }
 
-    pub fn get(&self, key: K) -> Option<&V> {
-        self.inner
-            .iter()
-            .find_map(|(k, v)| if *k == key { Some(v) } else { None })
+    pub fn get(&self, key: impl Into<K> + Clone) -> Option<&V> {
+        self.inner.iter().find_map(|(k, v)| {
+            if *k == key.clone().into() {
+                Some(v)
+            } else {
+                None
+            }
+        })
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
@@ -79,8 +83,8 @@ where
         Some(self.inner.remove(index).1)
     }
 
-    pub fn contains_key(&self, key: K) -> bool {
-        self.inner.iter().any(|(k, _)| *k == key)
+    pub fn contains_key(&self, key: impl Into<K> + Clone) -> bool {
+        self.inner.iter().any(|(k, _)| *k == key.clone().into())
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (K, V)> + '_ {
@@ -175,6 +179,48 @@ conversions_for_amqp_types!(
     AmqpOrderedMap<AmqpValue, AmqpValue>, Map
 );
 conversions_for_amqp_types!(std::time::SystemTime, TimeStamp);
+
+impl From<()> for AmqpValue {
+    fn from(_: ()) -> Self {
+        AmqpValue::Null
+    }
+}
+
+impl From<AmqpValue> for () {
+    fn from(v: AmqpValue) -> Self {
+        match v {
+            AmqpValue::Null => (),
+            _ => panic!("Expected a null value"),
+        }
+    }
+}
+
+impl PartialEq<()> for AmqpValue {
+    fn eq(&self, _: &()) -> bool {
+        matches!(self, AmqpValue::Null)
+    }
+}
+
+impl PartialEq<AmqpValue> for () {
+    fn eq(&self, other: &AmqpValue) -> bool {
+        other == self
+    }
+}
+
+impl From<Box<AmqpDescribed>> for AmqpDescribed {
+    fn from(b: Box<AmqpDescribed>) -> Self {
+        *b
+    }
+}
+
+impl From<AmqpValue> for AmqpDescribed {
+    fn from(v: AmqpValue) -> Self {
+        match v {
+            AmqpValue::Described(d) => *d,
+            _ => panic!("Expected a described value"),
+        }
+    }
+}
 
 impl From<&str> for AmqpValue {
     fn from(b: &str) -> Self {
@@ -303,151 +349,81 @@ mod tests {
         assert_eq!(v23, AmqpValue::Unknown);
     }
 
+    /// Simple conversion tests for the AmqpValue enum
+    /// This macro generates a test for each conversion from a specific type to AmqpValue and back
+    /// The test checks that the conversion is correct in both directions
+    /// The macro also generates a test for the conversion from the unit type to AmqpValue and back
+    macro_rules! test_conversion {
+        ($t:ty, $field:ident, $value:expr) => {
+            let saved_value = $value;
+            let v: AmqpValue = saved_value.clone().into();
+            assert_eq!(v, AmqpValue::$field(saved_value.clone()));
+            assert_eq!(AmqpValue::$field(saved_value.clone()), v);
+            let b: $t = v.into();
+            assert_eq!(b, saved_value);
+        };
+        () => {};
+    }
+
     #[test]
-    fn test_value_implicit() {
+    fn test_value_implicit_conversions() {
+        test_conversion!(bool, Boolean, true);
+        test_conversion!(u8, UByte, 1u8);
+        test_conversion!(u16, UShort, 2u16);
+        test_conversion!(u32, UInt, 3u32);
+        test_conversion!(u64, ULong, 4u64);
+        test_conversion!(i8, Byte, 5i8);
+        test_conversion!(i16, Short, 6i16);
+        test_conversion!(i32, Int, 7i32);
+        test_conversion!(i64, Long, 8i64);
+        test_conversion!(f32, Float, 9.0f32);
+        test_conversion!(f64, Double, 10.0f64);
+        test_conversion!(char, Char, 'a');
+        test_conversion!(
+            std::time::SystemTime,
+            TimeStamp,
+            std::time::SystemTime::now()
+        );
+        test_conversion!(uuid::Uuid, Uuid, uuid::Uuid::new_v4());
+        test_conversion!(Vec<u8>, Binary, vec![1, 2, 3]);
+        test_conversion!(String, String, "hello".to_string());
+        test_conversion!(AmqpSymbol, Symbol, AmqpSymbol("hello".to_string()));
+        test_conversion!(
+            AmqpList,
+            List,
+            AmqpList(vec![AmqpValue::Int(1), AmqpValue::Float(2.75f32)])
+        );
+        test_conversion!(
+            Vec<AmqpValue>,
+            Array,
+            vec![AmqpValue::Int(1), AmqpValue::Int(2)]
+        );
+        test_conversion!(
+            AmqpOrderedMap<AmqpValue, AmqpValue>,
+            Map,
+            AmqpOrderedMap::new()
+        );
+
         {
-            let v: AmqpValue = true.into();
-            assert_eq!(v, true);
-            assert_eq!(true, v);
-            let b: bool = v.into();
-            assert_eq!(b, true);
-        }
-        {
-            let v: AmqpValue = 1u8.into();
-            assert_eq!(v, 1u8);
-            assert_eq!(1u8, v);
-            let b: u8 = v.into();
-            assert_eq!(b, 1u8);
-        }
-        {
-            let v: AmqpValue = 2u16.into();
-            assert_eq!(v, 2u16);
-            assert_eq!(2u16, v);
-            let b: u16 = v.into();
-            assert_eq!(b, 2u16);
-        }
-        {
-            let v: AmqpValue = 3u32.into();
-            assert_eq!(v, 3u32);
-            assert_eq!(3u32, v);
-            let b: u32 = v.into();
-            assert_eq!(b, 3u32);
-        }
-        {
-            let v: AmqpValue = 4u64.into();
-            assert_eq!(v, 4u64);
-            assert_eq!(4u64, v);
-            let b: u64 = v.into();
-            assert_eq!(b, 4u64);
-        }
-        {
-            let v: AmqpValue = 5i8.into();
-            assert_eq!(v, 5i8);
-            assert_eq!(5i8, v);
-            let b: i8 = v.into();
-            assert_eq!(b, 5i8);
-        }
-        {
-            let v: AmqpValue = 6i16.into();
-            assert_eq!(v, 6i16);
-            assert_eq!(6i16, v);
-            let b: i16 = v.into();
-            assert_eq!(b, 6i16);
-        }
-        {
-            let v: AmqpValue = 7i32.into();
-            assert_eq!(v, 7i32);
-            assert_eq!(7i32, v);
-            let b: i32 = v.into();
-            assert_eq!(b, 7i32);
-        }
-        {
-            let v: AmqpValue = 8i64.into();
-            assert_eq!(v, 8i64);
-            assert_eq!(8i64, v);
-            let b: i64 = v.into();
-            assert_eq!(b, 8i64);
-        }
-        {
-            let v: AmqpValue = 9.0f32.into();
-            assert_eq!(v, 9.0f32);
-            assert_eq!(9.0f32, v);
-            let b: f32 = v.into();
-            assert_eq!(b, 9.0f32);
-        }
-        {
-            let v: AmqpValue = 10.0f64.into();
-            assert_eq!(v, 10.0f64);
-            assert_eq!(10.0f64, v);
-            let b: f64 = v.into();
-            assert_eq!(b, 10.0f64);
-        }
-        {
-            let v: AmqpValue = 'a'.into();
-            assert_eq!(v, 'a');
-            assert_eq!('a', v);
-            let b: char = v.into();
-            assert_eq!(b, 'a');
-        }
-        {
-            let timestamp = std::time::SystemTime::now();
-            let v: AmqpValue = timestamp.into();
-            assert_eq!(v, timestamp);
-            assert_eq!(timestamp, v);
-            let b: std::time::SystemTime = v.into();
-            assert_eq!(b, timestamp);
+            let described = AmqpDescribed {
+                descriptor: AmqpDescriptor::Code(23),
+                value: AmqpValue::Int(2),
+            };
+            let v: AmqpValue = AmqpValue::Described(Box::new(described.clone()));
+            assert_eq!(v, AmqpValue::Described(Box::new(described.clone())));
+            assert_eq!(AmqpValue::Described(Box::new(described.clone())), v);
+            let b: AmqpDescribed = v.into();
+            assert_eq!(b, described);
         }
 
         {
-            let uuid = uuid::Uuid::new_v4();
-            let v: AmqpValue = uuid.into();
-            assert_eq!(v, uuid);
-            assert_eq!(uuid, v);
-            let b: uuid::Uuid = v.into();
-            assert_eq!(b, uuid);
+            let v: AmqpValue = AmqpValue::Null;
+            assert_eq!(v, AmqpValue::Null);
+            assert_eq!(AmqpValue::Null, v);
+            let b: () = v.into();
+            assert_eq!(b, ());
         }
-        {
-            let v: AmqpValue = vec![1, 2, 3].into();
-            assert_eq!(v, vec![1, 2, 3]);
-            assert_eq!(vec![1, 2, 3], v);
-            let b: Vec<u8> = v.into();
-            assert_eq!(b, vec![1, 2, 3]);
-        }
-        {
-            let v: AmqpValue = "hello".into();
-            assert_eq!(v, "hello".to_string());
-            assert_eq!("hello".to_string(), v);
-            let b: String = v.into();
-            assert_eq!(b, "hello".to_string());
-        }
-        {
-            let v: AmqpValue = AmqpSymbol("hello".to_string()).into();
-            assert_eq!(v, AmqpSymbol("hello".to_string()));
-            assert_eq!(AmqpSymbol("hello".to_string()), v);
-            let b: AmqpSymbol = v.into();
-            assert_eq!(b, AmqpSymbol("hello".to_string()));
-        }
-        {
-            let v: AmqpValue = AmqpList(vec![AmqpValue::Int(1), AmqpValue::Int(2)]).into();
-            assert_eq!(v, AmqpList(vec![AmqpValue::Int(1), AmqpValue::Int(2)]));
-            assert_eq!(AmqpList(vec![AmqpValue::Int(1), AmqpValue::Int(2)]), v);
-            let b: AmqpList = v.into();
-            assert_eq!(b, AmqpList(vec![AmqpValue::Int(1), AmqpValue::Int(2)]));
-        }
-        {
-            let v: AmqpValue = AmqpOrderedMap::new().into();
-            assert_eq!(v, AmqpOrderedMap::new());
-            assert_eq!(AmqpOrderedMap::new(), v);
-            let b: AmqpOrderedMap<AmqpValue, AmqpValue> = v.into();
-            assert_eq!(b, AmqpOrderedMap::new());
-        }
-        {
-            let v: AmqpValue = vec![AmqpValue::Int(1), AmqpValue::Int(2)].into();
-            assert_eq!(v, vec![AmqpValue::Int(1), AmqpValue::Int(2)]);
-            assert_eq!(vec![AmqpValue::Int(1), AmqpValue::Int(2)], v);
-            let b: Vec<AmqpValue> = v.into();
-            assert_eq!(b, vec![AmqpValue::Int(1), AmqpValue::Int(2)]);
-        }
+
         {
             let v: AmqpValue = AmqpValue::Unknown;
             assert_eq!(v, AmqpValue::Unknown);

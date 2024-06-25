@@ -1,9 +1,15 @@
-//cspell: words amqp eventhub amqps servicebus eventhubs
+//cspell: words amqp eventhub amqps servicebus eventhubs mgmt
 
 use crate::{
     amqp_client::{
+        cbs::AmqpClaimsBasedSecurityTrait,
+        connection::{AmqpConnection, AmqpConnectionOptions, AmqpConnectionTrait},
+        management::{AmqpManagement, AmqpManagementTrait},
+        sender::{AmqpSender, AmqpSenderOptionsBuilder},
+        session::{
+            builders::AmqpSessionOptionsBuilder, AmqpSession, AmqpSessionOptions, AmqpSessionTrait,
+        },
         value::{AmqpOrderedMap, AmqpValue},
-        AmqpConnection, AmqpConnectionBuilder, AmqpSender, AmqpSession, AmqpSessionOptions,
     },
     common::user_agent::{
         get_package_name, get_package_version, get_platform_info, get_user_agent,
@@ -16,19 +22,22 @@ use azure_core::{
     auth::AccessToken,
     error::{Error, Result},
 };
+use batch::{EventDataBatch, EventDataBatchOptions};
+use log::{debug, trace};
 use std::{boxed::Box, collections::HashMap};
 use std::{
     sync::{Arc, OnceLock},
     time::SystemTime,
 };
-use time::UtcOffset;
 use tokio::sync::Mutex;
-use tracing::debug;
 use url::Url;
+
+pub mod batch;
 
 pub struct ProducerClientOptions {
     application_id: Option<String>,
     retry_options: Option<RetryOptions>,
+    max_message_size: Option<u64>,
 }
 
 impl ProducerClientOptions {
@@ -40,6 +49,7 @@ impl ProducerClientOptions {
 pub struct ProducerClientOptionsBuilder {
     application_id: Option<String>,
     retry_options: Option<RetryOptions>,
+    max_message_size: Option<u64>,
 }
 
 impl ProducerClientOptionsBuilder {
@@ -47,45 +57,55 @@ impl ProducerClientOptionsBuilder {
         Self {
             application_id: None,
             retry_options: None,
+            max_message_size: None,
         }
     }
 
-    pub fn with_application_id<T: Into<String>>(mut self, application_id: T) -> Self {
-        self.application_id = Some(application_id.into());
-        self
+    pub fn with_application_id<T: Into<String>>(self, application_id: T) -> Self {
+        Self {
+            application_id: Some(application_id.into()),
+            ..self
+        }
     }
 
-    pub fn with_retry_options(mut self, retry_options: RetryOptions) -> Self {
-        self.retry_options = Some(retry_options);
-        self
+    pub fn with_retry_options(self, retry_options: RetryOptions) -> Self {
+        Self {
+            retry_options: Some(retry_options),
+            ..self
+        }
+    }
+
+    pub fn with_max_message_size(self, max_message_size: u64) -> Self {
+        Self {
+            max_message_size: Some(max_message_size),
+            ..self
+        }
     }
 
     pub fn build(self) -> ProducerClientOptions {
         ProducerClientOptions {
             application_id: self.application_id,
             retry_options: self.retry_options,
+            max_message_size: self.max_message_size,
         }
     }
 }
 
 struct SenderInstance {
     #[allow(dead_code)]
-    session: Box<dyn AmqpSession>,
-    sender: Arc<Mutex<Box<dyn AmqpSender>>>,
+    session: AmqpSession,
+    sender: Arc<Mutex<AmqpSender>>,
 }
 
 #[derive(Debug)]
 struct ManagementInstance {
     #[allow(dead_code)]
-    session: Box<dyn AmqpSession>,
-    management: Box<dyn crate::amqp_client::AmqpManagement>,
+    session: AmqpSession,
+    management: AmqpManagement,
 }
 
 impl ManagementInstance {
-    fn new(
-        session: Box<dyn AmqpSession>,
-        management: Box<dyn crate::amqp_client::AmqpManagement>,
-    ) -> Self {
+    fn new(session: AmqpSession, management: AmqpManagement) -> Self {
         Self {
             session,
             management,
@@ -95,13 +115,14 @@ impl ManagementInstance {
 
 pub struct ProducerClient {
     options: ProducerClientOptions,
-    connection: OnceLock<Box<dyn AmqpConnection>>,
+    connection: OnceLock<AmqpConnection>,
     credential: Box<dyn azure_core::auth::TokenCredential>,
     fully_qualified_namespace: String,
     eventhub: String,
     url: String,
     authorization_scopes: Mutex<HashMap<String, AccessToken>>,
     mgmt_client: Mutex<OnceLock<ManagementInstance>>,
+    sender_instances: Mutex<HashMap<String, SenderInstance>>,
 }
 
 impl ProducerClient {
@@ -122,6 +143,7 @@ impl ProducerClient {
             fully_qualified_namespace: fully_qualified_namespace,
             authorization_scopes: Mutex::new(HashMap::new()),
             mgmt_client: Mutex::new(OnceLock::new()),
+            sender_instances: Mutex::new(HashMap::new()),
         })
     }
 
@@ -135,8 +157,19 @@ impl ProducerClient {
         Ok(())
     }
 
+    pub async fn create_batch(
+        &self,
+        batch_options: Option<EventDataBatchOptions>,
+    ) -> Result<EventDataBatch> {
+        let mut batch = EventDataBatch::new(&self, batch_options);
+
+        batch.attach().await?;
+        Ok(batch)
+    }
+
     pub async fn get_eventhub_properties(&self) -> Result<EventHubProperties> {
-        self.authorize_path(&self.url).await?;
+        let management_path = self.url.clone() + "/$management";
+        self.authorize_path(management_path).await?;
         self.ensure_management_client().await?;
 
         let response = self
@@ -146,24 +179,24 @@ impl ProducerClient {
             .get()
             .unwrap()
             .management
-            .call("com.microsoft:eventhub", self.eventhub.as_str(), None)
+            .call("com.microsoft:eventhub", &self.eventhub, None)
             .await?;
 
-        if !response.contains_key("name".to_string())
-            || !response.contains_key("type".to_string())
-            || !response.contains_key("created_at".to_string())
-            || !response.contains_key("partition_count".to_string())
-            || !response.contains_key("partition_ids".to_string())
+        if !response.contains_key("name")
+            || !response.contains_key("type")
+            || !response.contains_key("created_at")
+            || !response.contains_key("partition_count")
+            || !response.contains_key("partition_ids")
         {
             return Err(ErrorKind::InvalidManagementResponse.into());
         }
-        let name: String = response.get("name".to_string()).unwrap().clone().into();
+        let name: String = response.get("name").unwrap().clone().into();
         let created_at: SystemTime =
-            Into::<SystemTime>::into(response.get("created_at".to_string()).unwrap().clone());
+            Into::<SystemTime>::into(response.get("created_at").unwrap().clone());
         //        let partition_count: i32 =
         //            Into::<i32>::into(response.get("partition_count".to_string()).unwrap().clone());
 
-        let partition_ids = response.get("partition_ids".to_string()).unwrap();
+        let partition_ids = response.get("partition_ids").unwrap();
         let partition_ids = match partition_ids {
             AmqpValue::Array(partition_ids) => partition_ids
                 .iter()
@@ -179,16 +212,6 @@ impl ProducerClient {
             created_on: created_at,
             partition_ids,
         })
-    }
-
-    fn get_entity_property<T: TryFrom<AmqpValue>>(
-        map: &AmqpOrderedMap<String, AmqpValue>,
-        property_name: &str,
-    ) -> T
-    where
-        <T as TryFrom<AmqpValue>>::Error: core::fmt::Debug,
-    {
-        TryInto::<T>::try_into(map.get(property_name.into()).unwrap().clone()).unwrap()
     }
 
     pub async fn get_partition_properties(
@@ -212,58 +235,62 @@ impl ProducerClient {
             .unwrap()
             .management
             .call(
-                "com.microsoft:eventhub",
-                self.eventhub.as_str(),
+                "com.microsoft:partition",
+                &self.eventhub,
                 Some(application_properties),
             )
             .await?;
 
         // Look for the required response properties
-        if !response.contains_key("name".to_string())
-            || !response.contains_key("type".to_string())
-            || !response.contains_key("partition".to_string())
-            || !response.contains_key("begin_sequence_number_epoch".to_string())
-            || !response.contains_key("begin_sequence_number".to_string())
-            || !response.contains_key("last_enqueued_sequence_number_epoch".to_string())
-            || !response.contains_key("last_enqueued_sequence_number".to_string())
-            || !response.contains_key("last_enqueued_offset".to_string())
-            || !response.contains_key("last_enqueued_time_utc".to_string())
-            || !response.contains_key("is_partition_empty".to_string())
+        if !response.contains_key("name")
+            || !response.contains_key("type")
+            || !response.contains_key("partition")
+            || !response.contains_key("begin_sequence_number_epoch")
+            || !response.contains_key("begin_sequence_number")
+            || !response.contains_key("last_enqueued_sequence_number_epoch")
+            || !response.contains_key("last_enqueued_sequence_number")
+            || !response.contains_key("last_enqueued_offset")
+            || !response.contains_key("last_enqueued_time_utc")
+            || !response.contains_key("is_partition_empty")
         {
             return Err(ErrorKind::InvalidManagementResponse.into());
         }
 
         Ok(EventHubPartitionProperties {
-            beginning_sequence_number: Self::get_entity_property(
-                &response,
-                "begin_sequence_number",
-            ),
-            id: Self::get_entity_property(&response, "partition"),
-            eventhub: Self::get_entity_property(&response, "name"),
-            last_enqueued_sequence_number: Self::get_entity_property(
-                &response,
-                "last_enqueued_sequence_number",
-            ),
-            last_enqueued_offset: Self::get_entity_property::<String>(
-                &response,
-                "last_enqueued_offset",
-            )
-            .parse()
-            .unwrap(),
+            beginning_sequence_number: response
+                .get("begin_sequence_number")
+                .unwrap()
+                .clone()
+                .into(),
+            id: response.get("partition").unwrap().clone().into(),
+            eventhub: response.get("name").unwrap().clone().into(),
+
+            last_enqueued_sequence_number: response
+                .get("last_enqueued_sequence_number")
+                .unwrap()
+                .clone()
+                .into(),
+            last_enqueued_offset: response.get("last_enqueued_offset").unwrap().clone().into(),
             last_enqueued_time_utc: Into::<SystemTime>::into(
                 response
                     .get("last_enqueued_time_utc".to_string())
                     .unwrap()
                     .clone(),
             ),
-            is_empty: Self::get_entity_property(&response, "is_partition_empty"),
+            is_empty: response.get("is_partition_empty").unwrap().clone().into(),
         })
     }
 
+    pub(crate) fn base_url(&self) -> String {
+        self.url.clone()
+    }
+
     async fn ensure_management_client(&self) -> Result<()> {
+        trace!("Ensure management client.");
         let mgmt_client = self.mgmt_client.lock().await;
 
         if mgmt_client.get().is_some() {
+            trace!("Management client already exists.");
             return Ok(());
         }
 
@@ -272,33 +299,42 @@ impl ProducerClient {
             return Err(ErrorKind::MissingConnection.into());
         }
 
+        trace!("Create session.");
         let connection = self.connection.get().unwrap();
-        let session = connection
-            .create_session(AmqpSessionOptions::builder().build())
-            .await?;
-        let management = session.create_management("eventhub").await?;
+        let session = AmqpSession::new();
+        session.begin(connection, None).await?;
+        trace!("Session created.");
+
+        trace!("Create management client.");
+        let management = AmqpManagement::new(&session, "eventhubs").await?;
         mgmt_client
             .set(ManagementInstance::new(session, management))
             .unwrap();
+        trace!("Management client created.");
         Ok(())
     }
 
     async fn ensure_connection(&self, url: &String) -> Result<()> {
         if self.connection.get().is_none() {
-            let connection = AmqpConnectionBuilder::new()
-                .with_properties(vec![
-                    ("user-agent", get_user_agent(&self.options.application_id)),
-                    ("version", get_package_version().into()),
-                    ("platform", get_platform_info().into()),
-                    ("product", get_package_name().into()),
-                ])
+            let connection = AmqpConnection::new();
+            connection
                 .open(
                     self.options
                         .application_id
                         .clone()
                         .unwrap_or(uuid::Uuid::new_v4().to_string())
                         .as_str(),
-                    Url::parse(url.as_str()).map_err(Error::from)?,
+                    Url::parse(url).map_err(Error::from)?,
+                    Some(
+                        AmqpConnectionOptions::builder()
+                            .with_properties(vec![
+                                ("user-agent", get_user_agent(&self.options.application_id)),
+                                ("version", get_package_version().into()),
+                                ("platform", get_platform_info().into()),
+                                ("product", get_package_name().into()),
+                            ])
+                            .build(),
+                    ),
                 )
                 .await?;
             self.connection.set(connection).unwrap();
@@ -306,13 +342,55 @@ impl ProducerClient {
         Ok(())
     }
 
-    async fn authorize_path(&self, url: &str) -> Result<()> {
-        debug!("Authorizing path: {}", url);
+    async fn ensure_sender(&self, path: impl Into<String>) -> Result<Arc<Mutex<AmqpSender>>> {
+        let path: String = path.into();
+        let mut sender_instances = self.sender_instances.lock().await;
+        if !sender_instances.contains_key(&path) {
+            let connection = self.connection.get().unwrap();
+            let session = AmqpSession::new();
+            session
+                .begin(
+                    connection,
+                    Some(
+                        AmqpSessionOptions::builder()
+                            .with_incoming_window(std::u32::MAX)
+                            .with_outgoing_window(std::u32::MAX)
+                            .build(),
+                    ),
+                )
+                .await?;
+            let sender = session
+                .create_sender(
+                    path.clone(),
+                    Some(
+                        AmqpSenderOptionsBuilder::new()
+                            .with_name(format!("{:?}-sender", self.fully_qualified_namespace))
+                            .with_max_message_size(
+                                self.options.max_message_size.unwrap_or(std::u64::MAX),
+                            )
+                            .build(),
+                    ),
+                )
+                .await?;
+            sender_instances.insert(
+                path.clone(),
+                SenderInstance {
+                    session,
+                    sender: Arc::new(Mutex::new(sender)),
+                },
+            );
+        }
+        Ok(sender_instances.get(&path).unwrap().sender.clone())
+    }
+
+    async fn authorize_path(&self, url: impl Into<String>) -> Result<()> {
+        let url: String = url.into();
+        debug!("Authorizing path: {:?}", url);
         let mut scopes = self.authorization_scopes.lock().await;
         if self.connection.get().is_none() {
             return Err(ErrorKind::MissingConnection.into());
         }
-        if !scopes.contains_key(url) {
+        if !scopes.contains_key(url.as_str()) {
             let connection = self.connection.get().unwrap();
             let cbs = connection.create_claims_based_security().await?;
 
@@ -322,25 +400,11 @@ impl ProducerClient {
                 .get_token(&[&"https://eventhubs.azure.net/.default"])
                 .await?;
             debug!("Got token: {:?}", token.token.secret());
-            let expires_at = token
-                .expires_on
-                .to_offset(UtcOffset::UTC)
-                .unix_timestamp()
-                .checked_mul(1_000)
-                .unwrap();
-            cbs.authorize_path(url, token.token.secret(), expires_at)
+            let expires_at = token.expires_on;
+            cbs.authorize_path(&url, token.token.secret(), expires_at)
                 .await?;
-            scopes.insert(url.to_string(), token);
+            scopes.insert(url, token);
         }
-        Ok(())
-    }
-
-    async fn ensure_session(&self, partition_id: impl Into<String>) -> Result<()> {
-        let connection = self.connection.get().unwrap();
-
-        let session = connection
-            .create_session(AmqpSessionOptions::builder().build())
-            .await?;
         Ok(())
     }
 }
