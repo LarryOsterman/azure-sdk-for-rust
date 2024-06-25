@@ -9,15 +9,24 @@ use crate::amqp_client::{
 };
 use azure_core::Result;
 use log::debug;
-use std::{borrow::BorrowMut, sync::OnceLock};
+use std::{
+    borrow::BorrowMut,
+    sync::{Arc, OnceLock},
+};
 use tokio::sync::Mutex;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Fe2o3AmqpSession {
-    session: OnceLock<Mutex<fe2o3_amqp::session::SessionHandle<()>>>,
+    session: OnceLock<Arc<Mutex<fe2o3_amqp::session::SessionHandle<()>>>>,
 }
 
 unsafe impl Sync for Fe2o3AmqpSession {}
+
+impl Drop for Fe2o3AmqpSession {
+    fn drop(&mut self) {
+        debug!("Dropping Fe2o3AmqpSession.");
+    }
+}
 
 impl Fe2o3AmqpSession {
     pub(crate) fn new() -> Self {
@@ -26,8 +35,9 @@ impl Fe2o3AmqpSession {
         }
     }
 
-    pub(crate) fn get(&self) -> &Mutex<fe2o3_amqp::session::SessionHandle<()>> {
-        &self.session.get().unwrap()
+    /// Returns a reference to the session handle
+    pub(crate) fn get(&self) -> Arc<Mutex<fe2o3_amqp::session::SessionHandle<()>>> {
+        self.session.get().unwrap().clone()
     }
 }
 
@@ -47,7 +57,7 @@ impl AmqpSessionTrait for Fe2o3AmqpSession {
                 session_builder = session_builder.incoming_window(incoming_window);
             }
             if let Some(outgoing_window) = options.outgoing_window {
-                session_builder = session_builder.outgoing_widnow(outgoing_window);
+                session_builder = session_builder.outgoing_window(outgoing_window);
             }
             if let Some(handle_max) = options.handle_max {
                 session_builder = session_builder.handle_max(handle_max);
@@ -84,7 +94,7 @@ impl AmqpSessionTrait for Fe2o3AmqpSession {
             .begin(connection.borrow_mut())
             .await
             .map_err(AmqpBeginError::from)?;
-        self.session.set(Mutex::new(session)).unwrap();
+        self.session.set(Arc::new(Mutex::new(session))).unwrap();
         Ok(())
     }
 

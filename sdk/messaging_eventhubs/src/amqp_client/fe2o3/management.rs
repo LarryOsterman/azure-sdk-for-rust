@@ -8,100 +8,99 @@ use crate::amqp_client::{
     value::{AmqpOrderedMap, AmqpValue},
 };
 
-use azure_core::error::Result;
+use azure_core::{auth::AccessToken, error::Result};
 use fe2o3_amqp_management::operations::ReadResponse;
 use fe2o3_amqp_types::messaging::ApplicationProperties;
-use log::trace;
+use log::{debug, trace};
+use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 
 use super::{error::AmqpManagementAttachError, session::Fe2o3AmqpSession};
 
 #[derive(Debug)]
 pub(crate) struct Fe2o3AmqpManagement {
-    management: Mutex<fe2o3_amqp_management::MgmtClient>,
+    client_node_name: String,
+    access_token: AccessToken,
+    session: Arc<Mutex<fe2o3_amqp::session::SessionHandle<()>>>,
+    management: OnceLock<Mutex<fe2o3_amqp_management::MgmtClient>>,
+}
+
+impl Drop for Fe2o3AmqpManagement {
+    fn drop(&mut self) {
+        debug!("Dropping Fe2o3AmqpManagement.");
+    }
 }
 
 impl Fe2o3AmqpManagement {
-    pub(crate) async fn new(
-        session: &Fe2o3AmqpSession,
+    pub(crate) fn new(
+        session: Fe2o3AmqpSession,
         client_node_name: impl Into<String>,
-    ) -> Result<Self> {
-        let mut session = session.get().lock().await;
+        access_token: AccessToken,
+    ) -> Self {
+        // Session::get() returns a clone of the underlying session handle.
+        let session = session.get();
 
-        let management = fe2o3_amqp_management::client::MgmtClient::builder()
-            .client_node_addr(client_node_name)
-            //            .management_node_address("$management")
-            .attach(session.borrow_mut())
-            .await
-            .map_err(AmqpManagementAttachError::from)?;
-        Ok(Self {
-            management: Mutex::new(management),
-        })
+        Self {
+            access_token,
+            client_node_name: client_node_name.into(),
+            session,
+            management: OnceLock::new(),
+        }
     }
 }
 
 impl AmqpManagementTrait for Fe2o3AmqpManagement {
+    async fn attach(&self) -> Result<()> {
+        let management = fe2o3_amqp_management::client::MgmtClient::builder()
+            .client_node_addr(&self.client_node_name)
+            .attach(self.session.lock().await.borrow_mut())
+            .await
+            .map_err(AmqpManagementAttachError::from)?;
+
+        self.management.set(Mutex::new(management)).unwrap();
+        Ok(())
+    }
     async fn call(
         &self,
         operation_type: impl Into<String>,
-        entity: impl Into<String>,
-        application_properties: Option<AmqpOrderedMap<String, AmqpValue>>,
+        application_properties: AmqpOrderedMap<String, AmqpValue>,
     ) -> Result<AmqpOrderedMap<String, AmqpValue>> {
-        let mut management = self.management.lock().await;
+        let mut management = self.management.get().unwrap().lock().await;
 
-        if application_properties.is_none() {
-            let request = fe2o3_amqp_management::operations::ReadRequest::name(
-                entity.into(),
-                operation_type.into(),
-                None,
-            );
+        let request = WithApplicationPropertiesRequest::new(operation_type, application_properties);
 
-            trace!("Request: {:?}", request);
-
-            let response = management
-                .call(request)
-                .await
-                .map_err(AmqpManagementError::from)?;
-
-            Ok(response.entity_attributes.into())
-        } else {
-            let partition_id: String = application_properties
-                .unwrap()
-                .get("partition_id".to_string())
-                .unwrap()
-                .to_owned()
-                .into();
-            let request = GetPartitionRequest::new(entity, partition_id);
-            let response = management
-                .call(request)
-                .await
-                .map_err(AmqpManagementError::from)?;
-            Ok(response.entity_attributes.into())
-        }
+        let response = management
+            .call(request)
+            .await
+            .map_err(AmqpManagementError::from)?;
+        Ok(response.entity_attributes.into())
     }
 }
 
-struct GetPartitionRequest {
-    eventhub: String,
-    partition_id: String,
+struct WithApplicationPropertiesRequest {
+    entity_type: String,
+    application_properties: AmqpOrderedMap<String, AmqpValue>,
 }
 
-impl GetPartitionRequest {
-    pub fn new(eventhub: impl Into<String>, partition_id: impl Into<String>) -> Self {
+impl WithApplicationPropertiesRequest {
+    pub fn new(
+        entity_type: impl Into<String>,
+        application_properties: AmqpOrderedMap<String, AmqpValue>,
+    ) -> Self {
         Self {
-            eventhub: eventhub.into(),
-            partition_id: partition_id.into(),
+            entity_type: entity_type.into(),
+            application_properties,
         }
     }
 }
 
-impl fe2o3_amqp_management::Request for GetPartitionRequest {
+impl fe2o3_amqp_management::Request for WithApplicationPropertiesRequest {
     const OPERATION: &'static str = "READ";
     type Response = ReadResponse;
     type Body = ();
 
     fn manageable_entity_type(&mut self) -> Option<String> {
-        Some("com.microsoft:partition".to_owned())
+        Some(self.entity_type.clone())
     }
     fn locales(&mut self) -> Option<String> {
         None
@@ -109,12 +108,17 @@ impl fe2o3_amqp_management::Request for GetPartitionRequest {
     fn encode_application_properties(
         &mut self,
     ) -> Option<fe2o3_amqp_types::messaging::ApplicationProperties> {
-        Some(
-            ApplicationProperties::builder()
-                .insert("name", self.eventhub.clone())
-                .insert("partition", self.partition_id.clone())
-                .build(),
-        )
+        let builder = ApplicationProperties::builder();
+        let builder = self
+            .application_properties
+            .iter()
+            .fold(builder, |builder, (key, value)| {
+                builder.insert(
+                    key.clone(),
+                    Into::<fe2o3_amqp_types::primitives::SimpleValue>::into(value),
+                )
+            });
+        Some(builder.build())
     }
     fn encode_body(self) -> Self::Body {}
 }

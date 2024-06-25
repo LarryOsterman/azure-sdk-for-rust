@@ -1,21 +1,20 @@
 // cspell: words amqp sasl
 
-#[cfg(any(feature = "enable-fe2o3-amqp"))]
-use super::fe2o3::management::Fe2o3AmqpManagement;
-
 use super::{
     session::AmqpSession,
     value::{AmqpOrderedMap, AmqpValue},
 };
-use azure_core::error::Result;
+use azure_core::{auth::AccessToken, error::Result};
 use std::fmt::Debug;
 
 pub(crate) trait AmqpManagementTrait {
+    async fn attach(&self) -> Result<()> {
+        unimplemented!()
+    }
     async fn call(
         &self,
         operation_type: impl Into<String>,
-        entity: impl Into<String>,
-        application_properties: Option<AmqpOrderedMap<String, AmqpValue>>,
+        application_properties: AmqpOrderedMap<String, AmqpValue>,
     ) -> Result<AmqpOrderedMap<String, AmqpValue>> {
         unimplemented!()
     }
@@ -33,37 +32,38 @@ where
     }
 }
 
-#[derive(Debug)]
 #[cfg(any(feature = "enable-fe2o3-amqp"))]
-pub struct AmqpManagement(AmqpManagementImpl<Fe2o3AmqpManagement>);
+type ManagementImplementation = super::fe2o3::management::Fe2o3AmqpManagement;
 
 #[cfg(not(any(feature = "enable-fe2o3-amqp")))]
-pub struct AmqpManagement(AmqpManagementImpl<super::noop::NoopAmqpManagement>);
+type ManagementImplementation = super::noop::NoopAmqpManagement;
+
+#[derive(Debug)]
+pub struct AmqpManagement(AmqpManagementImpl<ManagementImplementation>);
 
 impl AmqpManagementTrait for AmqpManagement {
+    async fn attach(&self) -> Result<()> {
+        self.0 .0.attach().await
+    }
     async fn call(
         &self,
         operation_type: impl Into<String>,
-        entity: impl Into<String>,
-        application_properties: Option<AmqpOrderedMap<String, AmqpValue>>,
+        application_properties: AmqpOrderedMap<String, AmqpValue>,
     ) -> Result<AmqpOrderedMap<String, AmqpValue>> {
-        self.0
-             .0
-            .call(operation_type, entity, application_properties)
-            .await
+        self.0 .0.call(operation_type, application_properties).await
     }
 }
 
 impl AmqpManagement {
-    pub(crate) async fn new(
-        session: &AmqpSession,
+    pub(crate) fn new(
+        session: AmqpSession,
         client_node_name: impl Into<String>,
-    ) -> Result<Self> {
-        Ok(Self(AmqpManagementImpl::new(
-            #[cfg(any(feature = "enable-fe2o3-amqp"))]
-            Fe2o3AmqpManagement::new(&session.0 .0, client_node_name).await?,
-            #[cfg(not(any(feature = "enable-fe2o3-amqp")))]
-            super::noop::NoopAmqpManagement::new(),
+        access_token: AccessToken,
+    ) -> Self {
+        Self(AmqpManagementImpl::new(ManagementImplementation::new(
+            session.0 .0,
+            client_node_name,
+            access_token,
         )))
     }
 }

@@ -7,14 +7,6 @@ use std::fmt::Debug;
 use time::Duration;
 use url::Url;
 
-#[cfg(any(feature = "enable-fe2o3-amqp"))]
-use super::fe2o3::connection::Fe2o3AmqpConnection;
-
-#[cfg(not(any(feature = "enable-fe2o3-amqp")))]
-use super::noop::NoopAmqpConnection;
-
-use super::cbs::AmqpClaimsBasedSecurity;
-
 pub(crate) struct AmqpConnectionOptions {
     pub(crate) max_frame_size: Option<u32>,
     pub(crate) channel_max: Option<u16>,
@@ -46,10 +38,13 @@ pub(crate) trait AmqpConnectionTrait {
     async fn close(&self) -> Result<()> {
         unimplemented!();
     }
-    //    async fn create_claims_based_security(&self) -> Result<AmqpClaimsBasedSecurity> {
-    //        unimplemented!();
-    //    }
 }
+
+#[cfg(any(feature = "enable-fe2o3-amqp"))]
+type ConnectionImplementation = super::fe2o3::connection::Fe2o3AmqpConnection;
+
+#[cfg(not(any(feature = "enable-fe2o3-amqp")))]
+type ConnectionImplementation = super::noop::NoopAmqpConnection;
 
 #[derive(Debug)]
 pub(crate) struct AmqpConnectionImpl<T>(pub(crate) T);
@@ -64,11 +59,7 @@ where
 }
 
 #[derive(Debug)]
-#[cfg(any(feature = "enable-fe2o3-amqp"))]
-pub(crate) struct AmqpConnection(pub(crate) AmqpConnectionImpl<Fe2o3AmqpConnection>);
-
-#[cfg(not(any(feature = "enable-fe2o3-amqp")))]
-pub(crate) struct AmqpConnection(AmqpConnectionImpl<NoopAmqpConnection>);
+pub(crate) struct AmqpConnection(pub(crate) AmqpConnectionImpl<ConnectionImplementation>);
 
 impl AmqpConnectionTrait for AmqpConnection {
     async fn open(
@@ -82,17 +73,11 @@ impl AmqpConnectionTrait for AmqpConnection {
     async fn close(&self) -> Result<()> {
         self.0 .0.close().await
     }
-    //    async fn create_claims_based_security(&self) -> Result<AmqpClaimsBasedSecurity> {
-    //        self.0 .0.create_claims_based_security().await
-    //    }
 }
 
 impl AmqpConnection {
     pub(crate) fn new() -> Self {
-        #[cfg(any(feature = "enable-fe2o3-amqp"))]
-        let connection = Fe2o3AmqpConnection::new();
-        #[cfg(not(any(feature = "enable-fe2o3-amqp")))]
-        let connection = super::noop::NoopAmqpConnection;
+        let connection = ConnectionImplementation::new();
 
         Self(AmqpConnectionImpl::new(connection))
     }

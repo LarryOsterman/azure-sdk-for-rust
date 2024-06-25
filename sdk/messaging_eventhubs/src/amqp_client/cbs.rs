@@ -2,12 +2,13 @@
 
 use azure_core::error::Result;
 
+use super::session::AmqpSession;
+
 #[cfg(any(feature = "enable-fe2o3-amqp"))]
-use super::fe2o3::cbs::Fe2o3ClaimsBasedSecurity;
+type CbsImplementation = super::fe2o3::cbs::Fe2o3ClaimsBasedSecurity;
 
 #[cfg(not(any(feature = "enable-fe2o3-amqp")))]
-use super::noop::NoopAmqpClaimsBasedSecurity;
-use super::session::AmqpSession;
+type CbsImplementation = super::noop::NoopAmqpClaimsBasedSecurity;
 
 pub(crate) trait AmqpClaimsBasedSecurityTrait {
     async fn attach(&self) -> Result<()> {
@@ -36,13 +37,7 @@ where
 }
 
 #[derive(Debug)]
-#[cfg(any(feature = "enable-fe2o3-amqp"))]
-pub(crate) struct AmqpClaimsBasedSecurity(AmqpClaimsBasedSecurityImpl<Fe2o3ClaimsBasedSecurity>);
-
-#[cfg(not(any(feature = "enable-fe2o3-amqp")))]
-pub(crate) struct AmqpClaimsBasedSecurity(
-    AmqpClaimsBasedSecurityImpl<super::noop::NoopAmqpClaimsBasedSecurity>,
-);
+pub(crate) struct AmqpClaimsBasedSecurity(AmqpClaimsBasedSecurityImpl<CbsImplementation>);
 
 impl AmqpClaimsBasedSecurityTrait for AmqpClaimsBasedSecurity {
     async fn authorize_path(
@@ -63,10 +58,7 @@ impl AmqpClaimsBasedSecurityTrait for AmqpClaimsBasedSecurity {
 
 impl AmqpClaimsBasedSecurity {
     pub(crate) fn new(session: AmqpSession) -> Self {
-        #[cfg(any(feature = "enable-fe2o3-amqp"))]
-        let session = Fe2o3ClaimsBasedSecurity::new(session.0 .0);
-        #[cfg(not(any(feature = "enable-fe2o3-amqp")))]
-        let session = NoopAmqpClaimsBasedSecurity::new();
+        let session = CbsImplementation::new(session.0 .0);
 
         Self(AmqpClaimsBasedSecurityImpl::new(session))
     }

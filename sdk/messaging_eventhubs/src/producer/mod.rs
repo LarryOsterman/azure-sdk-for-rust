@@ -23,6 +23,7 @@ use azure_core::{
     error::{Error, Result},
 };
 use batch::{EventDataBatch, EventDataBatchOptions};
+use fe2o3_amqp_cbs::token;
 use log::{debug, trace};
 use std::{boxed::Box, collections::HashMap};
 use std::{
@@ -99,30 +100,25 @@ struct SenderInstance {
 
 #[derive(Debug)]
 struct ManagementInstance {
-    #[allow(dead_code)]
-    session: AmqpSession,
     management: AmqpManagement,
 }
 
 impl ManagementInstance {
-    fn new(session: AmqpSession, management: AmqpManagement) -> Self {
-        Self {
-            session,
-            management,
-        }
+    fn new(management: AmqpManagement) -> Self {
+        Self { management }
     }
 }
 
 pub struct ProducerClient {
     options: ProducerClientOptions,
+    sender_instances: Mutex<HashMap<String, SenderInstance>>,
+    mgmt_client: Mutex<OnceLock<ManagementInstance>>,
     connection: OnceLock<AmqpConnection>,
     credential: Box<dyn azure_core::auth::TokenCredential>,
     fully_qualified_namespace: String,
     eventhub: String,
     url: String,
     authorization_scopes: Mutex<HashMap<String, AccessToken>>,
-    mgmt_client: Mutex<OnceLock<ManagementInstance>>,
-    sender_instances: Mutex<HashMap<String, SenderInstance>>,
 }
 
 impl ProducerClient {
@@ -168,11 +164,16 @@ impl ProducerClient {
     }
 
     pub async fn get_eventhub_properties(&self) -> Result<EventHubProperties> {
-        let management_path = self.url.clone() + "/$management";
-        self.authorize_path(management_path).await?;
         self.ensure_management_client().await?;
+        let management_url = self.url.clone() + "/$management";
+        let access_token = self.authorize_path(management_url).await?;
 
-        let management_entity = self.eventhub.clone() + "/$management";
+        let mut application_properties: AmqpOrderedMap<String, AmqpValue> = AmqpOrderedMap::new();
+        application_properties.insert("name".to_string(), self.eventhub.clone().into());
+        application_properties.insert(
+            "security_token".to_string(),
+            access_token.token.secret().into(),
+        );
 
         let response = self
             .mgmt_client
@@ -181,7 +182,7 @@ impl ProducerClient {
             .get()
             .unwrap()
             .management
-            .call("com.microsoft:eventhub", management_entity, None)
+            .call("com.microsoft:eventhub", application_properties)
             .await?;
 
         if !response.contains_key("name")
@@ -220,14 +221,18 @@ impl ProducerClient {
         &self,
         partition_id: impl Into<String>,
     ) -> Result<EventHubPartitionProperties> {
-        self.authorize_path(&self.url).await?;
+        let access_token = self.authorize_path(&self.url).await?;
         self.ensure_management_client().await?;
 
         let partition_id: String = partition_id.into();
 
         let mut application_properties: AmqpOrderedMap<String, AmqpValue> = AmqpOrderedMap::new();
-        application_properties.insert("partition_id".to_string(), partition_id.into());
+        application_properties.insert("partition".to_string(), partition_id.into());
         application_properties.insert("name".to_string(), self.eventhub.clone().into());
+        application_properties.insert(
+            "security_token".to_string(),
+            access_token.token.secret().into(),
+        );
 
         let response = self
             .mgmt_client
@@ -236,11 +241,7 @@ impl ProducerClient {
             .get()
             .unwrap()
             .management
-            .call(
-                "com.microsoft:partition",
-                &self.eventhub,
-                Some(application_properties),
-            )
+            .call("com.microsoft:partition", application_properties)
             .await?;
 
         // Look for the required response properties
@@ -289,6 +290,7 @@ impl ProducerClient {
 
     async fn ensure_management_client(&self) -> Result<()> {
         trace!("Ensure management client.");
+
         let mgmt_client = self.mgmt_client.lock().await;
 
         if mgmt_client.get().is_some() {
@@ -301,16 +303,20 @@ impl ProducerClient {
             return Err(ErrorKind::MissingConnection.into());
         }
 
-        trace!("Create session.");
+        trace!("Create management session.");
         let connection = self.connection.get().unwrap();
         let session = AmqpSession::new();
         session.begin(connection, None).await?;
         trace!("Session created.");
 
+        let management_path = self.url.clone() + "/$management";
+        let access_token = self.authorize_path(management_path).await?;
+
         trace!("Create management client.");
-        let management = AmqpManagement::new(&session, "eventhubs_management").await?;
+        let management = AmqpManagement::new(session, "eventhubs_management", access_token);
+        management.attach().await?;
         mgmt_client
-            .set(ManagementInstance::new(session, management))
+            .set(ManagementInstance::new(management))
             .unwrap();
         trace!("Management client created.");
         Ok(())
@@ -385,7 +391,7 @@ impl ProducerClient {
         Ok(sender_instances.get(&path).unwrap().sender.clone())
     }
 
-    async fn authorize_path(&self, url: impl Into<String>) -> Result<()> {
+    async fn authorize_path(&self, url: impl Into<String>) -> Result<AccessToken> {
         let url: String = url.into();
         debug!("Authorizing path: {:?}", url);
         let mut scopes = self.authorization_scopes.lock().await;
@@ -394,9 +400,11 @@ impl ProducerClient {
         }
         if !scopes.contains_key(url.as_str()) {
             let connection = self.connection.get().unwrap();
-            // Create an ephemeral session for use with CBS authn.
+
+            // Create an ephemeral session to host the authentication.
             let session = AmqpSession::new();
             session.begin(connection, None).await?;
+
             let cbs = AmqpClaimsBasedSecurity::new(session);
             cbs.attach().await?;
 
@@ -409,9 +417,9 @@ impl ProducerClient {
             let expires_at = token.expires_on;
             cbs.authorize_path(&url, token.token.secret(), expires_at)
                 .await?;
-            scopes.insert(url, token);
+            scopes.insert(url.clone(), token);
         }
-        Ok(())
+        Ok(scopes.get(url.as_str()).unwrap().clone())
     }
 }
 

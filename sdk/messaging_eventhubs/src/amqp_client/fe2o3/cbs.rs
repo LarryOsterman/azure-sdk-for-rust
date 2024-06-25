@@ -6,33 +6,22 @@ use crate::amqp_client::{cbs::AmqpClaimsBasedSecurityTrait, fe2o3::error::AmqpMa
 use azure_core::error::Result;
 use fe2o3_amqp_cbs::token::CbsToken;
 use fe2o3_amqp_types::primitives::Timestamp;
-use log::trace;
+use log::{debug, trace};
 use std::borrow::BorrowMut;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 
 #[derive(Debug)]
 pub(crate) struct Fe2o3ClaimsBasedSecurity {
     cbs: OnceLock<Mutex<fe2o3_amqp_cbs::client::CbsClient>>,
-    session: Mutex<Fe2o3AmqpSession>,
+    session: Arc<Mutex<fe2o3_amqp::session::SessionHandle<()>>>,
 }
 
 impl Fe2o3ClaimsBasedSecurity {
     pub(crate) fn new(session: Fe2o3AmqpSession) -> Self {
-        //     let mut connection = self.connection.get().unwrap().lock().await;
-        //     let mut session = fe2o3_amqp::session::Session::begin(connection.borrow_mut())
-        //         .await
-        //         .map_err(AmqpBeginError::from)?;
-
-        //     let cbs_client = fe2o3_amqp_cbs::client::CbsClient::builder()
-        //         .client_node_addr("rust_eventhubs_cbs")
-        //         .attach(&mut session)
-        //         .await
-        //         .map_err(AmqpManagementAttachError::from)?;
-
         Self {
             cbs: OnceLock::new(),
-            session: Mutex::new(session),
+            session: session.get(),
         }
     }
 }
@@ -42,12 +31,18 @@ unsafe impl Sync for Fe2o3ClaimsBasedSecurity {}
 
 impl Fe2o3ClaimsBasedSecurity {}
 
+impl Drop for Fe2o3ClaimsBasedSecurity {
+    fn drop(&mut self) {
+        debug!("Dropping Fe2o3ClaimsBasedSecurity.");
+    }
+}
+
 impl AmqpClaimsBasedSecurityTrait for Fe2o3ClaimsBasedSecurity {
     async fn attach(&self) -> Result<()> {
-        let session = self.session.lock().await;
+        let mut session = self.session.lock().await;
         let cbs_client = fe2o3_amqp_cbs::client::CbsClient::builder()
             .client_node_addr("rust_eventhubs_cbs")
-            .attach(session.get().lock().await.borrow_mut())
+            .attach(session.borrow_mut())
             .await
             .map_err(AmqpManagementAttachError::from)?;
         self.cbs.set(Mutex::new(cbs_client)).unwrap();

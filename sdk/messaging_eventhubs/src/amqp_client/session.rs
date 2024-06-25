@@ -64,12 +64,14 @@ where
     }
 }
 
-#[derive(Debug)]
 #[cfg(any(feature = "enable-fe2o3-amqp"))]
-pub(crate) struct AmqpSession(pub(crate) AmqpSessionImpl<Fe2o3AmqpSession>);
+type SessionImplementation = super::fe2o3::session::Fe2o3AmqpSession;
 
 #[cfg(not(any(feature = "enable-fe2o3-amqp")))]
-pub(crate) struct AmqpSession(AmqpSessionImpl<super::noop::NoopAmqpSession>);
+type SessionImplementation = super::noop::NoopAmqpSession;
+
+#[derive(Debug)]
+pub(crate) struct AmqpSession(pub(crate) AmqpSessionImpl<SessionImplementation>);
 
 impl AmqpSessionTrait for AmqpSession {
     async fn begin(
@@ -94,10 +96,7 @@ impl AmqpSessionTrait for AmqpSession {
 
 impl AmqpSession {
     pub(crate) fn new() -> Self {
-        #[cfg(any(feature = "enable-fe2o3-amqp"))]
-        let inner = Fe2o3AmqpSession::new();
-        #[cfg(not(any(feature = "enable-fe2o3-amqp")))]
-        let inner = super::noop::NoopAmqpSession;
+        let inner = SessionImplementation::new();
         Self(AmqpSessionImpl::new(inner))
     }
 }

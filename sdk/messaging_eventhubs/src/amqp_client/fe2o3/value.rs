@@ -36,6 +36,40 @@ impl From<AmqpValue> for fe2o3_amqp_types::primitives::Symbol {
     }
 }
 
+impl From<AmqpValue> for fe2o3_amqp_types::primitives::SimpleValue {
+    fn from(v: AmqpValue) -> Self {
+        match v {
+            AmqpValue::Boolean(b) => fe2o3_amqp_types::primitives::SimpleValue::Bool(b),
+            AmqpValue::UByte(b) => fe2o3_amqp_types::primitives::SimpleValue::Ubyte(b),
+            AmqpValue::UShort(s) => fe2o3_amqp_types::primitives::SimpleValue::Ushort(s),
+            AmqpValue::UInt(i) => fe2o3_amqp_types::primitives::SimpleValue::Uint(i),
+            AmqpValue::ULong(l) => fe2o3_amqp_types::primitives::SimpleValue::Ulong(l),
+            AmqpValue::Byte(b) => fe2o3_amqp_types::primitives::SimpleValue::Byte(b),
+            AmqpValue::Short(s) => fe2o3_amqp_types::primitives::SimpleValue::Short(s),
+            AmqpValue::Int(i) => fe2o3_amqp_types::primitives::SimpleValue::Int(i),
+            AmqpValue::Long(l) => fe2o3_amqp_types::primitives::SimpleValue::Long(l),
+            AmqpValue::Float(f) => fe2o3_amqp_types::primitives::SimpleValue::Float(f.into()),
+            AmqpValue::Double(d) => fe2o3_amqp_types::primitives::SimpleValue::Double(d.into()),
+            AmqpValue::Char(c) => fe2o3_amqp_types::primitives::SimpleValue::Char(c),
+            AmqpValue::TimeStamp(t) => {
+                let t = t.duration_since(UNIX_EPOCH);
+                let t = t.unwrap().as_millis();
+                fe2o3_amqp_types::primitives::SimpleValue::Timestamp(Timestamp::from_milliseconds(
+                    t as i64,
+                ))
+            }
+            AmqpValue::Uuid(u) => fe2o3_amqp_types::primitives::SimpleValue::Uuid(u.into()),
+            AmqpValue::Binary(b) => {
+                fe2o3_amqp_types::primitives::SimpleValue::Binary(ByteBuf::from(b))
+            }
+            AmqpValue::String(s) => fe2o3_amqp_types::primitives::SimpleValue::String(s),
+            AmqpValue::Symbol(s) => fe2o3_amqp_types::primitives::SimpleValue::Symbol(s.into()),
+
+            _ => panic!("Expected a simple value."),
+        }
+    }
+}
+
 impl From<AmqpDescriptor> for serde_amqp::descriptor::Descriptor {
     fn from(descriptor: AmqpDescriptor) -> Self {
         match descriptor {

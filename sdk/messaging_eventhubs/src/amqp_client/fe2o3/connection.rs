@@ -1,9 +1,8 @@
 // cspell: words amqp widnow eventhubs sasl
 
 use crate::amqp_client::{
-    cbs::AmqpClaimsBasedSecurity,
     connection::{AmqpConnectionOptions, AmqpConnectionTrait},
-    fe2o3::error::{AmqpBeginError, AmqpConnectionError, AmqpManagementAttachError},
+    fe2o3::error::AmqpConnectionError,
 };
 
 use azure_core::Result;
@@ -13,7 +12,7 @@ use std::{borrow::BorrowMut, sync::OnceLock};
 use tokio::sync::Mutex;
 use url::Url;
 
-use super::{cbs::Fe2o3ClaimsBasedSecurity, error::AmqpOpenError};
+use super::error::AmqpOpenError;
 
 #[derive(Debug)]
 pub(crate) struct Fe2o3AmqpConnection {
@@ -31,6 +30,12 @@ impl Fe2o3AmqpConnection {
 
     pub(crate) fn get(&self) -> &OnceLock<Mutex<ConnectionHandle<()>>> {
         &self.connection
+    }
+}
+
+impl Drop for Fe2o3AmqpConnection {
+    fn drop(&mut self) {
+        debug!("Dropping Fe2o3AmqpConnection.");
     }
 }
 
