@@ -7,8 +7,12 @@ use super::fe2o3::cbs::Fe2o3ClaimsBasedSecurity;
 
 #[cfg(not(any(feature = "enable-fe2o3-amqp")))]
 use super::noop::NoopAmqpClaimsBasedSecurity;
+use super::session::AmqpSession;
 
 pub(crate) trait AmqpClaimsBasedSecurityTrait {
+    async fn attach(&self) -> Result<()> {
+        unimplemented!()
+    }
     async fn authorize_path(
         &self,
         path: &String,
@@ -50,13 +54,20 @@ impl AmqpClaimsBasedSecurityTrait for AmqpClaimsBasedSecurity {
         self.0 .0.authorize_path(path, secret, expires_on).await?;
         Ok(())
     }
+
+    async fn attach(&self) -> Result<()> {
+        self.0 .0.attach().await?;
+        Ok(())
+    }
 }
 
 impl AmqpClaimsBasedSecurity {
-    pub(crate) fn new(
-        #[cfg(any(feature = "enable-fe2o3-amqp"))] inner: Fe2o3ClaimsBasedSecurity,
-        #[cfg(not(any(feature = "enable-fe2o3-amqp")))] inner: NoopAmqpClaimsBasedSecurity,
-    ) -> Self {
-        Self(AmqpClaimsBasedSecurityImpl::new(inner))
+    pub(crate) fn new(session: AmqpSession) -> Self {
+        #[cfg(any(feature = "enable-fe2o3-amqp"))]
+        let session = Fe2o3ClaimsBasedSecurity::new(session.0 .0);
+        #[cfg(not(any(feature = "enable-fe2o3-amqp")))]
+        let session = NoopAmqpClaimsBasedSecurity::new();
+
+        Self(AmqpClaimsBasedSecurityImpl::new(session))
     }
 }

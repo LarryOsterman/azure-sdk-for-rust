@@ -46,9 +46,9 @@ pub(crate) trait AmqpConnectionTrait {
     async fn close(&self) -> Result<()> {
         unimplemented!();
     }
-    async fn create_claims_based_security(&self) -> Result<AmqpClaimsBasedSecurity> {
-        unimplemented!();
-    }
+    //    async fn create_claims_based_security(&self) -> Result<AmqpClaimsBasedSecurity> {
+    //        unimplemented!();
+    //    }
 }
 
 #[derive(Debug)]
@@ -82,9 +82,9 @@ impl AmqpConnectionTrait for AmqpConnection {
     async fn close(&self) -> Result<()> {
         self.0 .0.close().await
     }
-    async fn create_claims_based_security(&self) -> Result<AmqpClaimsBasedSecurity> {
-        self.0 .0.create_claims_based_security().await
-    }
+    //    async fn create_claims_based_security(&self) -> Result<AmqpClaimsBasedSecurity> {
+    //        self.0 .0.create_claims_based_security().await
+    //    }
 }
 
 impl AmqpConnection {

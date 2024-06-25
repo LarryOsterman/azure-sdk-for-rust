@@ -2,7 +2,7 @@
 
 use crate::{
     amqp_client::{
-        cbs::AmqpClaimsBasedSecurityTrait,
+        cbs::{AmqpClaimsBasedSecurity, AmqpClaimsBasedSecurityTrait},
         connection::{AmqpConnection, AmqpConnectionOptions, AmqpConnectionTrait},
         management::{AmqpManagement, AmqpManagementTrait},
         sender::{AmqpSender, AmqpSenderOptionsBuilder},
@@ -172,6 +172,8 @@ impl ProducerClient {
         self.authorize_path(management_path).await?;
         self.ensure_management_client().await?;
 
+        let management_entity = self.eventhub.clone() + "/$management";
+
         let response = self
             .mgmt_client
             .lock()
@@ -179,7 +181,7 @@ impl ProducerClient {
             .get()
             .unwrap()
             .management
-            .call("com.microsoft:eventhub", &self.eventhub, None)
+            .call("com.microsoft:eventhub", management_entity, None)
             .await?;
 
         if !response.contains_key("name")
@@ -306,7 +308,7 @@ impl ProducerClient {
         trace!("Session created.");
 
         trace!("Create management client.");
-        let management = AmqpManagement::new(&session, "eventhubs").await?;
+        let management = AmqpManagement::new(&session, "eventhubs_management").await?;
         mgmt_client
             .set(ManagementInstance::new(session, management))
             .unwrap();
@@ -392,7 +394,11 @@ impl ProducerClient {
         }
         if !scopes.contains_key(url.as_str()) {
             let connection = self.connection.get().unwrap();
-            let cbs = connection.create_claims_based_security().await?;
+            // Create an ephemeral session for use with CBS authn.
+            let session = AmqpSession::new();
+            session.begin(connection, None).await?;
+            let cbs = AmqpClaimsBasedSecurity::new(session);
+            cbs.attach().await?;
 
             debug!("Get Token.");
             let token = self
