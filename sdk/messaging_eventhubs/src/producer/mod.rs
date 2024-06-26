@@ -6,9 +6,7 @@ use crate::{
         connection::{AmqpConnection, AmqpConnectionOptions, AmqpConnectionTrait},
         management::{AmqpManagement, AmqpManagementTrait},
         sender::{AmqpSender, AmqpSenderOptionsBuilder},
-        session::{
-            builders::AmqpSessionOptionsBuilder, AmqpSession, AmqpSessionOptions, AmqpSessionTrait,
-        },
+        session::{AmqpSession, AmqpSessionOptions, AmqpSessionTrait},
         value::{AmqpOrderedMap, AmqpValue},
     },
     common::user_agent::{
@@ -23,7 +21,6 @@ use azure_core::{
     error::{Error, Result},
 };
 use batch::{EventDataBatch, EventDataBatchOptions};
-use fe2o3_amqp_cbs::token;
 use log::{debug, trace};
 use std::{boxed::Box, collections::HashMap};
 use std::{
@@ -170,10 +167,6 @@ impl ProducerClient {
 
         let mut application_properties: AmqpOrderedMap<String, AmqpValue> = AmqpOrderedMap::new();
         application_properties.insert("name".to_string(), self.eventhub.clone().into());
-        application_properties.insert(
-            "security_token".to_string(),
-            access_token.token.secret().into(),
-        );
 
         let response = self
             .mgmt_client
@@ -227,12 +220,8 @@ impl ProducerClient {
         let partition_id: String = partition_id.into();
 
         let mut application_properties: AmqpOrderedMap<String, AmqpValue> = AmqpOrderedMap::new();
-        application_properties.insert("partition".to_string(), partition_id.into());
         application_properties.insert("name".to_string(), self.eventhub.clone().into());
-        application_properties.insert(
-            "security_token".to_string(),
-            access_token.token.secret().into(),
-        );
+        application_properties.insert("partition".to_string(), partition_id.into());
 
         let response = self
             .mgmt_client

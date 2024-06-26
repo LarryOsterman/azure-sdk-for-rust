@@ -11,9 +11,37 @@ type CbsImplementation = super::fe2o3::cbs::Fe2o3ClaimsBasedSecurity;
 type CbsImplementation = super::noop::NoopAmqpClaimsBasedSecurity;
 
 pub(crate) trait AmqpClaimsBasedSecurityTrait {
+    /// Asynchronously attaches the Claims-Based Security (CBS) node to the AMQP session.
+    ///
+    /// This method is responsible for setting up the necessary AMQP links for CBS operations.
+    /// It must be called before attempting to authorize any AMQP paths using the `authorize_path` method.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` which is:
+    /// - `Ok(())` on successful attachment of the CBS node.
+    /// - `Err(e)` where `e` is an error from the `azure_core::error::Result` indicating the failure reason.
+    ///
     async fn attach(&self) -> Result<()> {
         unimplemented!()
     }
+
+    /// Asynchronously authorizes an AMQP path using the provided secret.
+    ///
+    /// The authorization is valid until the specified `expires_on` time. The path is typically a URI that represents an AMQP resource. The secret is typically a SAS token. The `expires_on` time is the time at which the authorization expires.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: A `String` reference representing the AMQP path to be authorized.
+    /// - `secret`: An implementor of `Into<String>` representing the secret used for authorization. This is typically a JSON Web token.
+    /// - `expires_on`: A `time::OffsetDateTime` representing the expiration time of the authorization.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` which is:
+    /// - `Ok(())` on successful authorization of the AMQP path.
+    /// - `Err(e)` where `e` is an error from the `azure_core::error::Result` indicating the failure reason.
+    ///
     async fn authorize_path(
         &self,
         path: &String,

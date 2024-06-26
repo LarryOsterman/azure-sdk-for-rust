@@ -10,7 +10,10 @@ use crate::amqp_client::{
 
 use azure_core::{auth::AccessToken, error::Result};
 use fe2o3_amqp_management::operations::ReadResponse;
-use fe2o3_amqp_types::messaging::ApplicationProperties;
+use fe2o3_amqp_types::{
+    messaging::{ApplicationProperties, IntoBody},
+    primitives::SimpleValue,
+};
 use log::{debug, trace};
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
@@ -67,7 +70,11 @@ impl AmqpManagementTrait for Fe2o3AmqpManagement {
     ) -> Result<AmqpOrderedMap<String, AmqpValue>> {
         let mut management = self.management.get().unwrap().lock().await;
 
-        let request = WithApplicationPropertiesRequest::new(operation_type, application_properties);
+        let request = WithApplicationPropertiesRequest::new(
+            operation_type,
+            &self.access_token,
+            application_properties,
+        );
 
         let response = management
             .call(request)
@@ -77,24 +84,27 @@ impl AmqpManagementTrait for Fe2o3AmqpManagement {
     }
 }
 
-struct WithApplicationPropertiesRequest {
+struct WithApplicationPropertiesRequest<'a> {
     entity_type: String,
+    access_token: &'a AccessToken,
     application_properties: AmqpOrderedMap<String, AmqpValue>,
 }
 
-impl WithApplicationPropertiesRequest {
+impl<'a> WithApplicationPropertiesRequest<'a> {
     pub fn new(
         entity_type: impl Into<String>,
+        access_token: &'a AccessToken,
         application_properties: AmqpOrderedMap<String, AmqpValue>,
     ) -> Self {
         Self {
             entity_type: entity_type.into(),
+            access_token,
             application_properties,
         }
     }
 }
 
-impl fe2o3_amqp_management::Request for WithApplicationPropertiesRequest {
+impl<'a> fe2o3_amqp_management::Request for WithApplicationPropertiesRequest<'a> {
     const OPERATION: &'static str = "READ";
     type Response = ReadResponse;
     type Body = ();
@@ -117,7 +127,11 @@ impl fe2o3_amqp_management::Request for WithApplicationPropertiesRequest {
                     key.clone(),
                     Into::<fe2o3_amqp_types::primitives::SimpleValue>::into(value),
                 )
-            });
+            })
+            .insert(
+                "security_token",
+                Into::<SimpleValue>::into(self.access_token.token.secret()),
+            );
         Some(builder.build())
     }
     fn encode_body(self) -> Self::Body {}
