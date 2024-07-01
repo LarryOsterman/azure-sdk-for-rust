@@ -42,6 +42,7 @@ pub(crate) trait AmqpClaimsBasedSecurityTrait {
     /// - `Ok(())` on successful authorization of the AMQP path.
     /// - `Err(e)` where `e` is an error from the `azure_core::error::Result` indicating the failure reason.
     ///
+    #[allow(unused_variables)]
     async fn authorize_path(
         &self,
         path: &String,

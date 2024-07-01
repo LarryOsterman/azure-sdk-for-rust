@@ -239,6 +239,11 @@ impl From<String> for AmqpSymbol {
         AmqpSymbol(s.into())
     }
 }
+impl From<AmqpSymbol> for String {
+    fn from(s: AmqpSymbol) -> Self {
+        s.0
+    }
+}
 
 impl From<&str> for AmqpSymbol {
     fn from(s: &str) -> Self {

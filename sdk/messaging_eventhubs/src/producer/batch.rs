@@ -1,6 +1,11 @@
+// cspell: words amqp
+
 use super::ProducerClient;
 
+use crate::models::EventData;
 use azure_core::error::Result;
+
+pub struct AddEventDataOptions {}
 
 pub struct EventDataBatch<'a> {
     producer: &'a ProducerClient,
@@ -12,7 +17,10 @@ pub struct EventDataBatch<'a> {
 }
 
 impl<'a> EventDataBatch<'a> {
-    pub fn new(producer: &'a ProducerClient, options: Option<EventDataBatchOptions>) -> Self {
+    pub(crate) fn new(
+        producer: &'a ProducerClient,
+        options: Option<EventDataBatchOptions>,
+    ) -> Self {
         Self {
             producer,
             serialized_messages: Vec::new(),
@@ -25,10 +33,39 @@ impl<'a> EventDataBatch<'a> {
         }
     }
 
-    pub async fn attach(&mut self) -> Result<()> {
+    pub(crate) async fn attach(&mut self) -> Result<()> {
         let sender = self.producer.ensure_sender(self.get_batch_path()).await?;
         self.max_size_in_bytes = sender.lock().await.max_message_size().unwrap();
         Ok(())
+    }
+
+    pub fn size(&self) -> u64 {
+        self.size_in_bytes
+    }
+
+    pub fn len(&self) -> usize {
+        self.serialized_messages.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.serialized_messages.is_empty()
+    }
+
+    pub fn add_amqp_message(
+        &self,
+        message: crate::amqp_client::messaging::AmqpMessage,
+        #[allow(unused_variables)] options: Option<AddEventDataOptions>,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
+    pub fn add_event_data(
+        &mut self,
+        event_data: impl Into<EventData>,
+        #[allow(unused_variables)] options: Option<AddEventDataOptions>,
+    ) -> Result<()> {
+        let event_data = event_data.into();
+        self.add_amqp_message(event_data.into(), options)
     }
 
     fn get_batch_path(&self) -> String {
@@ -75,13 +112,13 @@ impl EventDataBatchOptionsBuilder {
         self
     }
 
-    pub fn partition_key(mut self, partition_key: String) -> Self {
-        self.partition_key = Some(partition_key);
+    pub fn partition_key(mut self, partition_key: impl Into<String>) -> Self {
+        self.partition_key = Some(partition_key.into());
         self
     }
 
-    pub fn partition_id(mut self, partition_id: String) -> Self {
-        self.partition_id = Some(partition_id);
+    pub fn partition_id(mut self, partition_id: impl Into<String>) -> Self {
+        self.partition_id = Some(partition_id.into());
         self
     }
 
@@ -102,8 +139,8 @@ mod tests {
     fn test_batch_builder() {
         let options = EventDataBatchOptions::builder()
             .max_size_in_bytes(1024)
-            .partition_key("pk".to_string())
-            .partition_id("pid".to_string())
+            .partition_key("pk")
+            .partition_id("pid")
             .build();
 
         assert_eq!(options.max_size_in_bytes, Some(1024));

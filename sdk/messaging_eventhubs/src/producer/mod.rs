@@ -5,7 +5,7 @@ use crate::{
         cbs::{AmqpClaimsBasedSecurity, AmqpClaimsBasedSecurityTrait},
         connection::{AmqpConnection, AmqpConnectionOptions, AmqpConnectionTrait},
         management::{AmqpManagement, AmqpManagementTrait},
-        sender::{AmqpSender, AmqpSenderOptionsBuilder},
+        sender::{AmqpSender, AmqpSenderOptions},
         session::{AmqpSession, AmqpSessionOptions, AmqpSessionTrait},
         value::{AmqpOrderedMap, AmqpValue},
     },
@@ -13,7 +13,7 @@ use crate::{
         get_package_name, get_package_version, get_platform_info, get_user_agent,
     },
     error::ErrorKind,
-    EventHubPartitionProperties, EventHubProperties,
+    models::{EventHubPartitionProperties, EventHubProperties},
 };
 use azure_core::RetryOptions;
 use azure_core::{
@@ -360,7 +360,7 @@ impl ProducerClient {
                 .create_sender(
                     path.clone(),
                     Some(
-                        AmqpSenderOptionsBuilder::new()
+                        AmqpSenderOptions::builder()
                             .with_name(format!("{:?}-sender", self.fully_qualified_namespace))
                             .with_max_message_size(
                                 self.options.max_message_size.unwrap_or(std::u64::MAX),

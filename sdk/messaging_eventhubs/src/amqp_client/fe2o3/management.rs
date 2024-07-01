@@ -10,11 +10,8 @@ use crate::amqp_client::{
 
 use azure_core::{auth::AccessToken, error::Result};
 use fe2o3_amqp_management::operations::ReadResponse;
-use fe2o3_amqp_types::{
-    messaging::{ApplicationProperties, IntoBody},
-    primitives::SimpleValue,
-};
-use log::{debug, trace};
+use fe2o3_amqp_types::{messaging::ApplicationProperties, primitives::SimpleValue};
+use log::debug;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 

@@ -27,126 +27,8 @@ pub(crate) struct AmqpSenderOptions {
 }
 
 impl AmqpSenderOptions {
-    pub fn builder() -> AmqpSenderOptionsBuilder {
-        AmqpSenderOptionsBuilder::new()
-    }
-}
-
-pub(crate) struct AmqpSenderOptionsBuilder {
-    name: Option<String>,
-    sender_settle_mode: Option<SenderSettleMode>,
-    receiver_settle_mode: Option<ReceiverSettleMode>,
-    source: Option<AmqpSource>,
-    offered_capabilities: Option<Vec<AmqpSymbol>>,
-    desired_capabilities: Option<Vec<AmqpSymbol>>,
-    properties: Option<AmqpOrderedMap<AmqpSymbol, AmqpValue>>,
-    buffer_size: Option<usize>,
-    role: Option<AmqpValue>,
-    initial_delivery_count: Option<u32>,
-    max_message_size: Option<u64>,
-}
-
-impl AmqpSenderOptionsBuilder {
-    pub fn new() -> Self {
-        Self {
-            name: None,
-            sender_settle_mode: None,
-            receiver_settle_mode: None,
-            source: None,
-            offered_capabilities: None,
-            desired_capabilities: None,
-            properties: None,
-            buffer_size: None,
-            role: None,
-            initial_delivery_count: None,
-            max_message_size: None,
-        }
-    }
-    pub fn with_name(self, name: impl Into<String>) -> Self {
-        Self {
-            name: Some(name.into()),
-            ..self
-        }
-    }
-    pub fn with_sender_settle_mode(self, sender_settle_mode: SenderSettleMode) -> Self {
-        Self {
-            sender_settle_mode: Some(sender_settle_mode),
-            ..self
-        }
-    }
-    pub fn with_receiver_settle_mode(self, receiver_settle_mode: ReceiverSettleMode) -> Self {
-        Self {
-            receiver_settle_mode: Some(receiver_settle_mode),
-            ..self
-        }
-    }
-    pub fn with_source(self, source: AmqpSource) -> Self {
-        Self {
-            source: Some(source),
-            ..self
-        }
-    }
-    pub fn with_offered_capabilities(self, offered_capabilities: Vec<AmqpSymbol>) -> Self {
-        Self {
-            offered_capabilities: Some(offered_capabilities),
-            ..self
-        }
-    }
-    pub fn with_desired_capabilities(self, desired_capabilities: Vec<AmqpSymbol>) -> Self {
-        Self {
-            desired_capabilities: Some(desired_capabilities),
-            ..self
-        }
-    }
-    pub fn with_properties(self, properties: Vec<(&str, &str)>) -> Self {
-        let properties_map: AmqpOrderedMap<AmqpSymbol, AmqpValue> = properties
-            .into_iter()
-            .map(|(k, v)| (AmqpSymbol::from(k), AmqpValue::from(v)))
-            .collect();
-        Self {
-            properties: Some(properties_map),
-            ..self
-        }
-    }
-    pub fn with_buffer_size(self, buffer_size: usize) -> Self {
-        Self {
-            buffer_size: Some(buffer_size),
-            ..self
-        }
-    }
-    pub fn with_role(self, role: AmqpValue) -> Self {
-        Self {
-            role: Some(role),
-            ..self
-        }
-    }
-    pub fn with_initial_delivery_count(self, initial_delivery_count: u32) -> Self {
-        Self {
-            initial_delivery_count: Some(initial_delivery_count),
-            ..self
-        }
-    }
-    pub fn with_max_message_size(self, max_message_size: u64) -> Self {
-        Self {
-            max_message_size: Some(max_message_size),
-            ..self
-        }
-    }
-
-    pub fn build(self) -> AmqpSenderOptions {
-        AmqpSenderOptions {
-            name: self.name,
-            sender_settle_mode: self.sender_settle_mode,
-            receiver_settle_mode: self.receiver_settle_mode,
-            source: self.source,
-            offered_capabilities: self.offered_capabilities,
-            desired_capabilities: self.desired_capabilities,
-            properties: self.properties,
-            buffer_size: self.buffer_size,
-            role: self.role,
-            initial_delivery_count: self.initial_delivery_count,
-            max_message_size: self.max_message_size,
-        }
+    pub fn builder() -> builders::AmqpSenderOptionsBuilder {
+        builders::AmqpSenderOptionsBuilder::new()
     }
 }
 
@@ -170,6 +52,90 @@ impl AmqpSender {
     }
     pub(crate) async fn send(&self, message: AmqpMessage) -> Result<()> {
         Ok(self.inner.send(message).await?)
+    }
+}
+
+pub mod builders {
+    use super::*;
+
+    pub(crate) struct AmqpSenderOptionsBuilder {
+        options: AmqpSenderOptions,
+    }
+
+    impl AmqpSenderOptionsBuilder {
+        pub(super) fn new() -> Self {
+            AmqpSenderOptionsBuilder {
+                options: AmqpSenderOptions {
+                    name: None,
+                    sender_settle_mode: None,
+                    receiver_settle_mode: None,
+                    source: None,
+                    offered_capabilities: None,
+                    desired_capabilities: None,
+                    properties: None,
+                    buffer_size: None,
+                    role: None,
+                    initial_delivery_count: None,
+                    max_message_size: None,
+                },
+            }
+        }
+        pub fn with_name(mut self, name: impl Into<String>) -> Self {
+            self.options.name = Some(name.into());
+            self
+        }
+        pub fn with_sender_settle_mode(mut self, sender_settle_mode: SenderSettleMode) -> Self {
+            self.options.sender_settle_mode = Some(sender_settle_mode);
+            self
+        }
+        pub fn with_receiver_settle_mode(
+            mut self,
+            receiver_settle_mode: ReceiverSettleMode,
+        ) -> Self {
+            self.options.receiver_settle_mode = Some(receiver_settle_mode);
+            self
+        }
+        pub fn with_source(mut self, source: impl Into<AmqpSource>) -> Self {
+            self.options.source = Some(source.into());
+            self
+        }
+        pub fn with_offered_capabilities(mut self, offered_capabilities: Vec<AmqpSymbol>) -> Self {
+            self.options.offered_capabilities = Some(offered_capabilities);
+            self
+        }
+        pub fn with_desired_capabilities(mut self, desired_capabilities: Vec<AmqpSymbol>) -> Self {
+            self.options.desired_capabilities = Some(desired_capabilities);
+            self
+        }
+        pub fn with_properties(mut self, properties: Vec<(&str, &str)>) -> Self {
+            let properties_map: AmqpOrderedMap<AmqpSymbol, AmqpValue> = properties
+                .into_iter()
+                .map(|(k, v)| (AmqpSymbol::from(k), AmqpValue::from(v)))
+                .collect();
+
+            self.options.properties = Some(properties_map);
+            self
+        }
+        pub fn with_buffer_size(mut self, buffer_size: usize) -> Self {
+            self.options.buffer_size = Some(buffer_size);
+            self
+        }
+        pub fn with_role(mut self, role: AmqpValue) -> Self {
+            self.options.role = Some(role);
+            self
+        }
+        pub fn with_initial_delivery_count(mut self, initial_delivery_count: u32) -> Self {
+            self.options.initial_delivery_count = Some(initial_delivery_count);
+            self
+        }
+        pub fn with_max_message_size(mut self, max_message_size: u64) -> Self {
+            self.options.max_message_size = Some(max_message_size);
+            self
+        }
+
+        pub fn build(self) -> AmqpSenderOptions {
+            self.options
+        }
     }
 }
 

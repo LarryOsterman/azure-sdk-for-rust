@@ -11,6 +11,8 @@ pub(crate) trait AmqpManagementTrait {
     async fn attach(&self) -> Result<()> {
         unimplemented!()
     }
+
+    #[allow(unused_variables)]
     async fn call(
         &self,
         operation_type: impl Into<String>,

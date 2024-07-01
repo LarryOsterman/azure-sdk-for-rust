@@ -127,3 +127,27 @@ async fn test_get_partition_properties() {
         assert_eq!(partition_properties.id, partition_id);
     }
 }
+
+#[tokio::test]
+async fn test_create_batch() {
+    common::setup();
+    let host = env::var("EVENTHUBS_HOST").unwrap();
+    let eventhub = env::var("EVENTHUB_NAME").unwrap();
+
+    let credential = DefaultAzureCredential::create(TokenCredentialOptions::default()).unwrap();
+
+    let client = ProducerClient::new(
+        host,
+        eventhub.clone(),
+        credential,
+        ProducerClientOptions::builder()
+            .with_application_id("test_create_batch")
+            .build(),
+    )
+    .unwrap();
+    client.open().await.unwrap();
+    {
+        let batch = client.create_batch(None).await.unwrap();
+        assert_eq!(batch.len(), 0);
+    }
+}
