@@ -2,7 +2,7 @@
 
 use crate::amqp_client::value::{AmqpList, AmqpOrderedMap, AmqpValue};
 
-use super::value::AmqpSymbol;
+use super::value::{AmqpSymbol, AmqpTimestamp};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TerminusDurability {
@@ -31,6 +31,14 @@ pub enum AmqpOutcome {
     Rejected,
     Released,
     Modified,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AmqpMessageId {
+    String(String),
+    Uuid(uuid::Uuid),
+    Binary(Vec<u8>),
+    Ulong(u64),
 }
 
 /// A target node in an AMQP message
@@ -95,25 +103,51 @@ impl AmqpSource {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AmqpMessageHeader {
-    pub durable: Option<bool>,
-    pub priority: Option<u8>,
-    pub time_to_live: Option<u64>,
-    pub first_acquirer: Option<bool>,
-    pub delivery_count: Option<u32>,
+    durable: Option<bool>,
+    priority: Option<u8>,
+    time_to_live: Option<u32>,
+    first_acquirer: Option<bool>,
+    delivery_count: Option<u32>,
+}
+
+impl AmqpMessageHeader {
+    pub fn builder() -> builders::AmqpMessageHeaderBuilder {
+        builders::AmqpMessageHeaderBuilder::new()
+    }
+
+    pub fn durable(&self) -> Option<&bool> {
+        self.durable.as_ref()
+    }
+
+    pub fn priority(&self) -> Option<&u8> {
+        self.priority.as_ref()
+    }
+
+    pub fn time_to_live(&self) -> Option<&u32> {
+        self.time_to_live.as_ref()
+    }
+
+    pub fn first_acquirer(&self) -> Option<&bool> {
+        self.first_acquirer.as_ref()
+    }
+
+    pub fn delivery_count(&self) -> Option<&u32> {
+        self.delivery_count.as_ref()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AmqpMessageProperties {
-    message_id: Option<AmqpValue>,
+    message_id: Option<AmqpMessageId>,
     user_id: Option<Vec<u8>>,
-    to: Option<AmqpValue>,
+    to: Option<String>,
     subject: Option<String>,
-    reply_to: Option<AmqpValue>,
-    correlation_id: Option<AmqpValue>,
+    reply_to: Option<String>,
+    correlation_id: Option<AmqpMessageId>,
     content_type: Option<AmqpSymbol>,
     content_encoding: Option<AmqpSymbol>,
-    absolute_expiry_time: Option<std::time::SystemTime>,
-    creation_time: Option<std::time::SystemTime>,
+    absolute_expiry_time: Option<AmqpTimestamp>,
+    creation_time: Option<AmqpTimestamp>,
     group_id: Option<String>,
     group_sequence: Option<u32>,
     reply_to_group_id: Option<String>,
@@ -124,7 +158,7 @@ impl AmqpMessageProperties {
         builders::AmqpMessagePropertiesBuilder::new()
     }
 
-    pub fn message_id(&self) -> Option<&AmqpValue> {
+    pub fn message_id(&self) -> Option<&AmqpMessageId> {
         self.message_id.as_ref()
     }
 
@@ -132,7 +166,7 @@ impl AmqpMessageProperties {
         self.user_id.as_ref()
     }
 
-    pub fn to(&self) -> Option<&AmqpValue> {
+    pub fn to(&self) -> Option<&String> {
         self.to.as_ref()
     }
 
@@ -140,11 +174,11 @@ impl AmqpMessageProperties {
         self.subject.as_ref()
     }
 
-    pub fn reply_to(&self) -> Option<&AmqpValue> {
+    pub fn reply_to(&self) -> Option<&String> {
         self.reply_to.as_ref()
     }
 
-    pub fn correlation_id(&self) -> Option<&AmqpValue> {
+    pub fn correlation_id(&self) -> Option<&AmqpMessageId> {
         self.correlation_id.as_ref()
     }
 
@@ -156,11 +190,11 @@ impl AmqpMessageProperties {
         self.content_encoding.as_ref()
     }
 
-    pub fn absolute_expiry_time(&self) -> Option<&std::time::SystemTime> {
+    pub fn absolute_expiry_time(&self) -> Option<&AmqpTimestamp> {
         self.absolute_expiry_time.as_ref()
     }
 
-    pub fn creation_time(&self) -> Option<&std::time::SystemTime> {
+    pub fn creation_time(&self) -> Option<&AmqpTimestamp> {
         self.creation_time.as_ref()
     }
 
@@ -209,6 +243,18 @@ impl From<Vec<AmqpList>> for AmqpMessageBody {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum AmqpAnnotationKey {
+    Symbol(AmqpSymbol),
+    Ulong(u64),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AmqpAnnotations(pub AmqpOrderedMap<AmqpAnnotationKey, AmqpValue>);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AmqpApplicationProperties(pub AmqpOrderedMap<String, AmqpValue>);
+
 /// An AMQP message
 /// This is a simplified version of the AMQP message
 /// that is used in the Azure SDK for Event Hubs
@@ -218,18 +264,46 @@ impl From<Vec<AmqpList>> for AmqpMessageBody {
 ///
 #[derive(Debug, Clone, PartialEq)]
 pub struct AmqpMessage {
-    pub body: AmqpMessageBody,
-    pub header: Option<AmqpMessageHeader>,
-    pub application_properties: Option<AmqpOrderedMap<String, AmqpValue>>,
-    pub message_annotations: Option<AmqpOrderedMap<AmqpValue, AmqpValue>>,
-    pub delivery_annotations: Option<AmqpOrderedMap<AmqpValue, AmqpValue>>,
-    pub properties: Option<AmqpMessageProperties>,
-    pub footer: Option<AmqpOrderedMap<AmqpValue, AmqpValue>>,
+    body: AmqpMessageBody,
+    header: Option<AmqpMessageHeader>,
+    application_properties: Option<AmqpApplicationProperties>,
+    message_annotations: Option<AmqpAnnotations>,
+    delivery_annotations: Option<AmqpAnnotations>,
+    properties: Option<AmqpMessageProperties>,
+    footer: Option<AmqpAnnotations>,
 }
 
 impl AmqpMessage {
     pub fn builder() -> builders::AmqpMessageBuilder {
         builders::AmqpMessageBuilder::new()
+    }
+
+    pub fn body(&self) -> &AmqpMessageBody {
+        &self.body
+    }
+
+    pub fn header(&self) -> Option<&AmqpMessageHeader> {
+        self.header.as_ref()
+    }
+
+    pub fn application_properties(&self) -> Option<&AmqpApplicationProperties> {
+        self.application_properties.as_ref()
+    }
+
+    pub fn message_annotations(&self) -> Option<&AmqpAnnotations> {
+        self.message_annotations.as_ref()
+    }
+
+    pub fn delivery_annotations(&self) -> Option<&AmqpAnnotations> {
+        self.delivery_annotations.as_ref()
+    }
+
+    pub fn properties(&self) -> Option<&AmqpMessageProperties> {
+        self.properties.as_ref()
+    }
+
+    pub fn footer(&self) -> Option<&AmqpAnnotations> {
+        self.footer.as_ref()
     }
 }
 
@@ -360,6 +434,47 @@ pub mod builders {
         }
     }
 
+    pub struct AmqpMessageHeaderBuilder {
+        header: AmqpMessageHeader,
+    }
+
+    impl AmqpMessageHeaderBuilder {
+        pub fn build(self) -> AmqpMessageHeader {
+            self.header
+        }
+        pub(super) fn new() -> AmqpMessageHeaderBuilder {
+            AmqpMessageHeaderBuilder {
+                header: AmqpMessageHeader {
+                    durable: None,
+                    priority: None,
+                    time_to_live: None,
+                    first_acquirer: None,
+                    delivery_count: None,
+                },
+            }
+        }
+        pub fn with_durable(mut self, durable: bool) -> Self {
+            self.header.durable = Some(durable);
+            self
+        }
+        pub fn with_priority(mut self, priority: u8) -> Self {
+            self.header.priority = Some(priority);
+            self
+        }
+        pub fn with_time_to_live(mut self, time_to_live: u32) -> Self {
+            self.header.time_to_live = Some(time_to_live);
+            self
+        }
+        pub fn with_first_acquirer(mut self, first_acquirer: bool) -> Self {
+            self.header.first_acquirer = Some(first_acquirer);
+            self
+        }
+        pub fn with_delivery_count(mut self, delivery_count: u32) -> Self {
+            self.header.delivery_count = Some(delivery_count);
+            self
+        }
+    }
+
     pub struct AmqpMessagePropertiesBuilder {
         properties: AmqpMessageProperties,
     }
@@ -387,7 +502,7 @@ pub mod builders {
                 },
             }
         }
-        pub fn with_message_id(mut self, message_id: AmqpValue) -> Self {
+        pub fn with_message_id(mut self, message_id: AmqpMessageId) -> Self {
             self.properties.message_id = Some(message_id);
             self
         }
@@ -395,7 +510,7 @@ pub mod builders {
             self.properties.user_id = Some(user_id);
             self
         }
-        pub fn with_to(mut self, to: AmqpValue) -> Self {
+        pub fn with_to(mut self, to: String) -> Self {
             self.properties.to = Some(to);
             self
         }
@@ -403,11 +518,11 @@ pub mod builders {
             self.properties.subject = Some(subject.into());
             self
         }
-        pub fn with_reply_to(mut self, reply_to: AmqpValue) -> Self {
+        pub fn with_reply_to(mut self, reply_to: String) -> Self {
             self.properties.reply_to = Some(reply_to);
             self
         }
-        pub fn with_correlation_id(mut self, correlation_id: AmqpValue) -> Self {
+        pub fn with_correlation_id(mut self, correlation_id: AmqpMessageId) -> Self {
             self.properties.correlation_id = Some(correlation_id);
             self
         }
@@ -419,14 +534,11 @@ pub mod builders {
             self.properties.content_encoding = Some(content_encoding);
             self
         }
-        pub fn with_absolute_expiry_time(
-            mut self,
-            absolute_expiry_time: std::time::SystemTime,
-        ) -> Self {
+        pub fn with_absolute_expiry_time(mut self, absolute_expiry_time: AmqpTimestamp) -> Self {
             self.properties.absolute_expiry_time = Some(absolute_expiry_time);
             self
         }
-        pub fn with_creation_time(mut self, creation_time: std::time::SystemTime) -> Self {
+        pub fn with_creation_time(mut self, creation_time: AmqpTimestamp) -> Self {
             self.properties.creation_time = Some(creation_time);
             self
         }
@@ -475,32 +587,27 @@ pub mod builders {
         }
         pub fn with_application_properties(
             mut self,
-            application_properties: AmqpOrderedMap<String, AmqpValue>,
+            application_properties: AmqpApplicationProperties,
         ) -> Self {
             self.message.application_properties = Some(application_properties);
             self
         }
         pub fn add_application_property(mut self, key: String, value: AmqpValue) -> Self {
             if let Some(application_properties) = &mut self.message.application_properties {
-                application_properties.insert(key, value);
+                application_properties.0.insert(key, value);
             } else {
                 let mut application_properties = AmqpOrderedMap::new();
                 application_properties.insert(key, value);
-                self.message.application_properties = Some(application_properties);
+                self.message.application_properties =
+                    Some(AmqpApplicationProperties(application_properties));
             }
             self
         }
-        pub fn with_message_annotations(
-            mut self,
-            message_annotations: AmqpOrderedMap<AmqpValue, AmqpValue>,
-        ) -> Self {
+        pub fn with_message_annotations(mut self, message_annotations: AmqpAnnotations) -> Self {
             self.message.message_annotations = Some(message_annotations);
             self
         }
-        pub fn with_delivery_annotations(
-            mut self,
-            delivery_annotations: AmqpOrderedMap<AmqpValue, AmqpValue>,
-        ) -> Self {
+        pub fn with_delivery_annotations(mut self, delivery_annotations: AmqpAnnotations) -> Self {
             self.message.delivery_annotations = Some(delivery_annotations);
             self
         }
@@ -508,7 +615,7 @@ pub mod builders {
             self.message.properties = Some(properties);
             self
         }
-        pub fn with_footer(mut self, footer: AmqpOrderedMap<AmqpValue, AmqpValue>) -> Self {
+        pub fn with_footer(mut self, footer: AmqpAnnotations) -> Self {
             self.message.footer = Some(footer);
             self
         }

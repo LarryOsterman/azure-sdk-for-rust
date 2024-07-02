@@ -12,7 +12,7 @@ mod models {
     use fe2o3_amqp_types::messaging::properties;
 
     use crate::amqp_client::{
-        messaging::{AmqpMessage, AmqpMessageProperties},
+        messaging::{AmqpMessage, AmqpMessageId, AmqpMessageProperties},
         value::AmqpValue,
     };
     use std::collections::HashMap;
@@ -73,8 +73,8 @@ mod models {
     pub struct EventData {
         body: Vec<u8>,
         content_type: Option<String>,
-        correlation_id: Option<AmqpValue>,
-        message_id: Option<String>,
+        correlation_id: Option<AmqpMessageId>,
+        message_id: Option<AmqpMessageId>,
         properties: HashMap<String, AmqpValue>,
     }
 
@@ -93,30 +93,29 @@ mod models {
             }
         }
 
-        // pub fn set_body(&mut self, body: Vec<u8>) -> &mut Self {
-        //     self.body = body;
-        //     self
-        // }
+        pub fn properties(&self) -> Option<&HashMap<String, AmqpValue>> {
+            if self.properties.is_empty() {
+                None
+            } else {
+                Some(&self.properties)
+            }
+        }
 
-        // pub fn set_content_type(&mut self, content_type: impl Into<String>) -> &mut Self {
-        //     self.content_type = Some(content_type.into());
-        //     self
-        // }
+        pub fn body(&self) -> &[u8] {
+            &self.body
+        }
 
-        // pub fn set_correlation_id(&mut self, correlation_id: AmqpValue) -> &mut Self {
-        //     self.correlation_id = Some(correlation_id);
-        //     self
-        // }
+        pub fn content_type(&self) -> Option<&str> {
+            self.content_type.as_deref()
+        }
 
-        // pub fn set_message_id(&mut self, message_id: impl Into<String>) -> &mut Self {
-        //     self.message_id = Some(message_id.into());
-        //     self
-        // }
+        pub fn correlation_id(&self) -> Option<&AmqpMessageId> {
+            self.correlation_id.as_ref()
+        }
 
-        // pub fn set_property(&mut self, key: impl Into<String>, value: AmqpValue) -> &mut Self {
-        //     self.properties.insert(key.into(), value);
-        //     self
-        // }
+        pub fn message_id(&self) -> Option<&AmqpMessageId> {
+            self.message_id.as_ref()
+        }
     }
 
     impl From<Vec<u8>> for EventData {
@@ -135,7 +134,7 @@ mod models {
         fn from(message: AmqpMessage) -> Self {
             let mut event_data_builder = EventData::builder();
 
-            if let Some(properties) = message.properties {
+            if let Some(properties) = message.properties() {
                 if let Some(content_type) = properties.content_type() {
                     event_data_builder = event_data_builder
                         .with_content_type(Into::<String>::into(content_type.clone()));
@@ -148,8 +147,8 @@ mod models {
                     event_data_builder = event_data_builder.with_message_id(message_id.clone());
                 }
             }
-            if let Some(application_properties) = message.application_properties {
-                for (key, value) in application_properties {
+            if let Some(application_properties) = message.application_properties() {
+                for (key, value) in application_properties.0.clone() {
                     event_data_builder = event_data_builder.add_property(key, value);
                 }
             }
@@ -169,8 +168,7 @@ mod models {
                     message_properties_builder.with_correlation_id(correlation_id);
             }
             if let Some(message_id) = event_data.message_id {
-                message_properties_builder =
-                    message_properties_builder.with_message_id(message_id.into());
+                message_properties_builder = message_properties_builder.with_message_id(message_id);
             }
             message_builder = message_builder.with_properties(message_properties_builder.build());
             for (key, value) in event_data.properties {
@@ -204,12 +202,12 @@ mod models {
                 self
             }
 
-            pub fn with_correlation_id(mut self, correlation_id: AmqpValue) -> Self {
-                self.event_data.correlation_id = Some(correlation_id);
+            pub fn with_correlation_id(mut self, correlation_id: impl Into<AmqpMessageId>) -> Self {
+                self.event_data.correlation_id = Some(correlation_id.into());
                 self
             }
 
-            pub fn with_message_id(mut self, message_id: impl Into<String>) -> Self {
+            pub fn with_message_id(mut self, message_id: impl Into<AmqpMessageId>) -> Self {
                 self.event_data.message_id = Some(message_id.into());
                 self
             }

@@ -6,7 +6,7 @@ use std::time::UNIX_EPOCH;
 use serde_amqp::primitives::Timestamp;
 
 use crate::amqp_client::value::{
-    AmqpDescribed, AmqpDescriptor, AmqpList, AmqpOrderedMap, AmqpSymbol, AmqpValue,
+    AmqpDescribed, AmqpDescriptor, AmqpList, AmqpOrderedMap, AmqpSymbol, AmqpTimestamp, AmqpValue,
 };
 
 impl From<fe2o3_amqp_types::primitives::Symbol> for AmqpSymbol {
@@ -36,6 +36,22 @@ impl From<AmqpValue> for fe2o3_amqp_types::primitives::Symbol {
     }
 }
 
+impl From<fe2o3_amqp_types::primitives::Timestamp> for AmqpTimestamp {
+    fn from(timestamp: fe2o3_amqp_types::primitives::Timestamp) -> Self {
+        AmqpTimestamp(
+            std::time::UNIX_EPOCH
+                + std::time::Duration::from_millis(timestamp.milliseconds() as u64),
+        )
+    }
+}
+
+impl From<AmqpTimestamp> for fe2o3_amqp_types::primitives::Timestamp {
+    fn from(timestamp: AmqpTimestamp) -> Self {
+        let t = timestamp.0.duration_since(UNIX_EPOCH).unwrap().as_millis();
+        fe2o3_amqp_types::primitives::Timestamp::from_milliseconds(t as i64)
+    }
+}
+
 impl From<AmqpValue> for fe2o3_amqp_types::primitives::SimpleValue {
     fn from(v: AmqpValue) -> Self {
         match v {
@@ -52,11 +68,7 @@ impl From<AmqpValue> for fe2o3_amqp_types::primitives::SimpleValue {
             AmqpValue::Double(d) => fe2o3_amqp_types::primitives::SimpleValue::Double(d.into()),
             AmqpValue::Char(c) => fe2o3_amqp_types::primitives::SimpleValue::Char(c),
             AmqpValue::TimeStamp(t) => {
-                let t = t.duration_since(UNIX_EPOCH);
-                let t = t.unwrap().as_millis();
-                fe2o3_amqp_types::primitives::SimpleValue::Timestamp(Timestamp::from_milliseconds(
-                    t as i64,
-                ))
+                fe2o3_amqp_types::primitives::SimpleValue::Timestamp(t.into())
             }
             AmqpValue::Uuid(u) => fe2o3_amqp_types::primitives::SimpleValue::Uuid(u.into()),
             AmqpValue::Binary(b) => {
@@ -65,6 +77,36 @@ impl From<AmqpValue> for fe2o3_amqp_types::primitives::SimpleValue {
             AmqpValue::String(s) => fe2o3_amqp_types::primitives::SimpleValue::String(s),
             AmqpValue::Symbol(s) => fe2o3_amqp_types::primitives::SimpleValue::Symbol(s.into()),
 
+            _ => panic!("Expected a simple value."),
+        }
+    }
+}
+
+impl From<fe2o3_amqp_types::primitives::SimpleValue> for AmqpValue {
+    fn from(v: fe2o3_amqp_types::primitives::SimpleValue) -> Self {
+        match v {
+            fe2o3_amqp_types::primitives::SimpleValue::Null => AmqpValue::Null,
+            fe2o3_amqp_types::primitives::SimpleValue::Bool(b) => AmqpValue::Boolean(b),
+            fe2o3_amqp_types::primitives::SimpleValue::Ubyte(b) => AmqpValue::UByte(b),
+            fe2o3_amqp_types::primitives::SimpleValue::Ushort(s) => AmqpValue::UShort(s),
+            fe2o3_amqp_types::primitives::SimpleValue::Uint(i) => AmqpValue::UInt(i),
+            fe2o3_amqp_types::primitives::SimpleValue::Ulong(l) => AmqpValue::ULong(l),
+            fe2o3_amqp_types::primitives::SimpleValue::Byte(b) => AmqpValue::Byte(b),
+            fe2o3_amqp_types::primitives::SimpleValue::Short(s) => AmqpValue::Short(s),
+            fe2o3_amqp_types::primitives::SimpleValue::Int(i) => AmqpValue::Int(i),
+            fe2o3_amqp_types::primitives::SimpleValue::Long(l) => AmqpValue::Long(l),
+            fe2o3_amqp_types::primitives::SimpleValue::Float(f) => AmqpValue::Float(f.into()),
+            fe2o3_amqp_types::primitives::SimpleValue::Double(d) => AmqpValue::Double(d.into()),
+            fe2o3_amqp_types::primitives::SimpleValue::Char(c) => AmqpValue::Char(c),
+            fe2o3_amqp_types::primitives::SimpleValue::Timestamp(t) => {
+                AmqpValue::TimeStamp(t.into())
+            }
+            fe2o3_amqp_types::primitives::SimpleValue::Uuid(u) => AmqpValue::Uuid(u.into()),
+            fe2o3_amqp_types::primitives::SimpleValue::Binary(b) => {
+                AmqpValue::Binary(ByteBuf::into_vec(b))
+            }
+            fe2o3_amqp_types::primitives::SimpleValue::String(s) => AmqpValue::String(s),
+            fe2o3_amqp_types::primitives::SimpleValue::Symbol(s) => AmqpValue::Symbol(s.into()),
             _ => panic!("Expected a simple value."),
         }
     }
@@ -104,13 +146,7 @@ impl From<AmqpValue> for fe2o3_amqp_types::primitives::Value {
             AmqpValue::Float(f) => fe2o3_amqp_types::primitives::Value::Float(f.into()),
             AmqpValue::Double(d) => fe2o3_amqp_types::primitives::Value::Double(d.into()),
             AmqpValue::Char(c) => fe2o3_amqp_types::primitives::Value::Char(c),
-            AmqpValue::TimeStamp(t) => {
-                let t = t.duration_since(UNIX_EPOCH);
-                let t = t.unwrap().as_millis();
-                fe2o3_amqp_types::primitives::Value::Timestamp(Timestamp::from_milliseconds(
-                    t as i64,
-                ))
-            }
+            AmqpValue::TimeStamp(t) => fe2o3_amqp_types::primitives::Value::Timestamp(t.into()),
             AmqpValue::Uuid(u) => fe2o3_amqp_types::primitives::Value::Uuid(u.into()),
             AmqpValue::Binary(b) => fe2o3_amqp_types::primitives::Value::Binary(ByteBuf::from(b)),
             AmqpValue::String(s) => fe2o3_amqp_types::primitives::Value::String(s),
@@ -151,11 +187,7 @@ impl From<fe2o3_amqp_types::primitives::Value> for AmqpValue {
             fe2o3_amqp_types::primitives::Value::Float(f) => AmqpValue::Float(f.into()),
             fe2o3_amqp_types::primitives::Value::Double(d) => AmqpValue::Double(d.into()),
             fe2o3_amqp_types::primitives::Value::Char(c) => AmqpValue::Char(c),
-            fe2o3_amqp_types::primitives::Value::Timestamp(t) => {
-                let t: u64 = t.milliseconds() as u64;
-                let t = UNIX_EPOCH + std::time::Duration::from_millis(t);
-                AmqpValue::TimeStamp(t)
-            }
+            fe2o3_amqp_types::primitives::Value::Timestamp(t) => AmqpValue::TimeStamp(t.into()),
             fe2o3_amqp_types::primitives::Value::Uuid(u) => AmqpValue::Uuid(u.into()),
             fe2o3_amqp_types::primitives::Value::Binary(b) => {
                 AmqpValue::Binary(ByteBuf::into_vec(b))
@@ -257,7 +289,7 @@ impl PartialEq<AmqpValue> for fe2o3_amqp_types::primitives::Value {
             }
             AmqpValue::Char(c) => self == &fe2o3_amqp_types::primitives::Value::Char(*c),
             AmqpValue::TimeStamp(t) => {
-                let t: u64 = t.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+                let t: u64 = t.0.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
                 self == &fe2o3_amqp_types::primitives::Value::Timestamp(
                     Timestamp::from_milliseconds(t as i64),
                 )

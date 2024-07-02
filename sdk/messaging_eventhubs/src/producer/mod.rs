@@ -7,7 +7,7 @@ use crate::{
         management::{AmqpManagement, AmqpManagementTrait},
         sender::{AmqpSender, AmqpSenderOptions},
         session::{AmqpSession, AmqpSessionOptions, AmqpSessionTrait},
-        value::{AmqpOrderedMap, AmqpValue},
+        value::{AmqpOrderedMap, AmqpTimestamp, AmqpValue},
     },
     common::user_agent::{
         get_package_name, get_package_version, get_platform_info, get_user_agent,
@@ -188,7 +188,7 @@ impl ProducerClient {
         }
         let name: String = response.get("name").unwrap().clone().into();
         let created_at: SystemTime =
-            Into::<SystemTime>::into(response.get("created_at").unwrap().clone());
+            Into::<AmqpTimestamp>::into(response.get("created_at").unwrap().clone()).0;
         //        let partition_count: i32 =
         //            Into::<i32>::into(response.get("partition_count".to_string()).unwrap().clone());
 
@@ -263,12 +263,13 @@ impl ProducerClient {
                 .clone()
                 .into(),
             last_enqueued_offset: response.get("last_enqueued_offset").unwrap().clone().into(),
-            last_enqueued_time_utc: Into::<SystemTime>::into(
+            last_enqueued_time_utc: Into::<AmqpTimestamp>::into(
                 response
                     .get("last_enqueued_time_utc".to_string())
                     .unwrap()
                     .clone(),
-            ),
+            )
+            .0,
             is_empty: response.get("is_partition_empty").unwrap().clone().into(),
         })
     }

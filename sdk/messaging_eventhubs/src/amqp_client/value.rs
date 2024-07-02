@@ -7,6 +7,9 @@ pub struct AmqpSymbol(pub String);
 pub struct AmqpList(pub Vec<AmqpValue>);
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct AmqpTimestamp(pub std::time::SystemTime);
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct AmqpOrderedMap<K, V>
 where
     K: PartialEq,
@@ -41,7 +44,7 @@ pub enum AmqpValue {
     Float(f32),
     Double(f64),
     Char(char),
-    TimeStamp(std::time::SystemTime),
+    TimeStamp(AmqpTimestamp),
     Uuid(uuid::Uuid),
     Binary(Vec<u8>),
     String(String),
@@ -178,7 +181,7 @@ conversions_for_amqp_types!(
     Vec<AmqpValue>,Array,
     AmqpOrderedMap<AmqpValue, AmqpValue>, Map
 );
-conversions_for_amqp_types!(std::time::SystemTime, TimeStamp);
+conversions_for_amqp_types!(AmqpTimestamp, TimeStamp);
 
 impl From<()> for AmqpValue {
     fn from(_: ()) -> Self {
@@ -271,6 +274,17 @@ where
     }
 }
 
+impl<V> FromIterator<V> for AmqpList
+where
+    V: Into<AmqpValue>,
+{
+    fn from_iter<I: IntoIterator<Item = V>>(iter: I) -> Self {
+        AmqpList {
+            0: iter.into_iter().map(|v| v.into()).collect(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::vec;
@@ -293,7 +307,7 @@ mod tests {
         let v10 = AmqpValue::Float(9.0);
         let v11 = AmqpValue::Double(10.0);
         let v12 = AmqpValue::Char('a');
-        let v13 = AmqpValue::TimeStamp(timestamp);
+        let v13 = AmqpValue::TimeStamp(AmqpTimestamp(timestamp));
         let v14 = AmqpValue::Uuid(uuid);
         let v15 = AmqpValue::Binary(vec![1, 2, 3]);
         let v16 = AmqpValue::String("hello".to_string());
@@ -323,7 +337,7 @@ mod tests {
         assert_eq!(v10, AmqpValue::Float(9.0));
         assert_eq!(v11, AmqpValue::Double(10.0));
         assert_eq!(v12, AmqpValue::Char('a'));
-        assert_eq!(v13, AmqpValue::TimeStamp(timestamp));
+        assert_eq!(v13, AmqpValue::TimeStamp(AmqpTimestamp(timestamp)));
         assert_eq!(v14, AmqpValue::Uuid(uuid));
         assert_eq!(v15, AmqpValue::Binary(vec![1, 2, 3]));
         assert_eq!(v16, AmqpValue::String("hello".to_string()));
@@ -385,9 +399,9 @@ mod tests {
         test_conversion!(f64, Double, 10.0f64);
         test_conversion!(char, Char, 'a');
         test_conversion!(
-            std::time::SystemTime,
+            AmqpTimestamp,
             TimeStamp,
-            std::time::SystemTime::now()
+            AmqpTimestamp(std::time::SystemTime::now())
         );
         test_conversion!(uuid::Uuid, Uuid, uuid::Uuid::new_v4());
         test_conversion!(Vec<u8>, Binary, vec![1, 2, 3]);
