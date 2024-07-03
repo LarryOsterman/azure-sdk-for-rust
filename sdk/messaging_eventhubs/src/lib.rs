@@ -8,14 +8,13 @@ pub mod consumer;
 pub mod error;
 pub mod producer;
 
-mod models {
+pub mod models {
 
     use crate::amqp_client::{
         messaging::{AmqpMessage, AmqpMessageId, AmqpMessageProperties},
         value::AmqpValue,
     };
     use std::collections::HashMap;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[derive(Debug)]
     pub struct EventHubProperties {
@@ -100,6 +99,12 @@ mod models {
         }
     }
 
+    impl From<&str> for MessageId {
+        fn from(value: &str) -> Self {
+            Self::String(value.to_string())
+        }
+    }
+
     impl From<String> for MessageId {
         fn from(value: String) -> Self {
             Self::String(value)
@@ -166,11 +171,11 @@ mod models {
 
     #[derive(Debug)]
     pub struct EventData {
-        body: Vec<u8>,
+        body: Option<Vec<u8>>,
         content_type: Option<String>,
         correlation_id: Option<MessageId>,
         message_id: Option<MessageId>,
-        properties: HashMap<String, AmqpValue>,
+        properties: Option<HashMap<String, AmqpValue>>,
     }
 
     impl EventData {
@@ -178,26 +183,22 @@ mod models {
             builders::EventDataBuilder::new()
         }
 
-        pub fn new() -> Self {
+        fn new() -> Self {
             Self {
-                body: Vec::new(),
+                body: None,
                 content_type: None,
                 correlation_id: None,
                 message_id: None,
-                properties: HashMap::new(),
+                properties: None,
             }
         }
 
         pub fn properties(&self) -> Option<&HashMap<String, AmqpValue>> {
-            if self.properties.is_empty() {
-                None
-            } else {
-                Some(&self.properties)
-            }
+            self.properties.as_ref()
         }
 
-        pub fn body(&self) -> &[u8] {
-            &self.body
+        pub fn body(&self) -> Option<&[u8]> {
+            self.body.as_ref().map(|b| b.as_slice())
         }
 
         pub fn content_type(&self) -> Option<&str> {
@@ -216,11 +217,11 @@ mod models {
     impl From<Vec<u8>> for EventData {
         fn from(body: Vec<u8>) -> Self {
             Self {
-                body,
+                body: Some(body),
                 content_type: None,
                 correlation_id: None,
                 message_id: None,
-                properties: HashMap::new(),
+                properties: None,
             }
         }
     }
@@ -266,9 +267,12 @@ mod models {
                 message_properties_builder =
                     message_properties_builder.with_message_id(message_id.into());
             }
-            message_builder = message_builder.with_properties(message_properties_builder.build());
-            for (key, value) in event_data.properties {
-                message_builder = message_builder.add_application_property(key, value);
+            if let Some(properties) = event_data.properties {
+                message_builder =
+                    message_builder.with_properties(message_properties_builder.build());
+                for (key, value) in properties {
+                    message_builder = message_builder.add_application_property(key, value);
+                }
             }
             message_builder.build()
         }
@@ -289,7 +293,7 @@ mod models {
             }
 
             pub fn with_body(mut self, body: Vec<u8>) -> Self {
-                self.event_data.body = body;
+                self.event_data.body = Some(body);
                 self
             }
 
@@ -308,8 +312,19 @@ mod models {
                 self
             }
 
-            pub fn add_property(mut self, key: impl Into<String>, value: AmqpValue) -> Self {
-                self.event_data.properties.insert(key.into(), value);
+            pub fn add_property(
+                mut self,
+                key: impl Into<String>,
+                value: impl Into<AmqpValue>,
+            ) -> Self {
+                if let Some(mut properties) = self.event_data.properties {
+                    properties.insert(key.into(), value.into());
+                    self.event_data.properties = Some(properties);
+                } else {
+                    let mut properties = HashMap::new();
+                    properties.insert(key.into(), value.into());
+                    self.event_data.properties = Some(properties);
+                }
                 self
             }
 
@@ -399,7 +414,7 @@ mod tests {
         let body = vec![1, 2, 3];
         let event_data = EventData::builder().with_body(body.clone()).build();
 
-        assert_eq!(event_data.body(), &body);
+        assert_eq!(event_data.body().unwrap(), &body);
     }
 
     #[test]
@@ -458,7 +473,7 @@ mod tests {
             .add_property(key.clone(), value.clone())
             .build();
 
-        assert_eq!(event_data.body(), &body);
+        assert_eq!(event_data.body().unwrap(), &body);
         assert_eq!(event_data.content_type(), Some(content_type));
         assert_eq!(event_data.correlation_id(), Some(&correlation_id));
         assert_eq!(event_data.message_id(), Some(&message_id));

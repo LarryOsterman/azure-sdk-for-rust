@@ -259,7 +259,9 @@ where
     K: PartialEq,
 {
     fn from(v: Vec<(K, V)>) -> Self {
-        AmqpOrderedMap { inner: v }
+        AmqpOrderedMap {
+            inner: v.into_iter().map(|(k, v)| (k, v)).collect(),
+        }
     }
 }
 
@@ -464,5 +466,218 @@ mod tests {
         assert_eq!(map.remove(&"key1"), Some(1));
         assert_eq!(map.remove(&"key1"), None);
         assert_eq!(map.get("key1"), None);
+    }
+
+    #[test]
+    fn test_amqp_value() {
+        // Test AmqpValue::Null
+        let null_value: AmqpValue = AmqpValue::Null;
+        assert_eq!(null_value, AmqpValue::Null);
+        assert_eq!(AmqpValue::Null, null_value);
+        let null_unit: () = null_value.into();
+        assert_eq!(null_unit, ());
+
+        // Test AmqpValue::Boolean
+        let bool_value: AmqpValue = AmqpValue::Boolean(true);
+        assert_eq!(bool_value, AmqpValue::Boolean(true));
+        assert_eq!(AmqpValue::Boolean(true), bool_value);
+        let bool_val: bool = bool_value.into();
+        assert_eq!(bool_val, true);
+
+        // Test AmqpValue::UByte
+        let ubyte_value: AmqpValue = AmqpValue::UByte(255);
+        assert_eq!(ubyte_value, AmqpValue::UByte(255));
+        assert_eq!(AmqpValue::UByte(255), ubyte_value);
+        let ubyte_val: u8 = ubyte_value.into();
+        assert_eq!(ubyte_val, 255);
+
+        // Test AmqpValue::UShort
+        let ushort_value: AmqpValue = AmqpValue::UShort(65535);
+        assert_eq!(ushort_value, AmqpValue::UShort(65535));
+        assert_eq!(AmqpValue::UShort(65535), ushort_value);
+        let ushort_val: u16 = ushort_value.into();
+        assert_eq!(ushort_val, 65535);
+
+        // Test AmqpValue::UInt
+        let uint_value: AmqpValue = AmqpValue::UInt(4294967295);
+        assert_eq!(uint_value, AmqpValue::UInt(4294967295));
+        assert_eq!(AmqpValue::UInt(4294967295), uint_value);
+        let uint_val: u32 = uint_value.into();
+        assert_eq!(uint_val, 4294967295);
+
+        // Test AmqpValue::ULong
+        let ulong_value: AmqpValue = AmqpValue::ULong(18446744073709551615);
+        assert_eq!(ulong_value, AmqpValue::ULong(18446744073709551615));
+        assert_eq!(AmqpValue::ULong(18446744073709551615), ulong_value);
+        let ulong_val: u64 = ulong_value.into();
+        assert_eq!(ulong_val, 18446744073709551615);
+
+        // Test AmqpValue::Byte
+        let byte_value: AmqpValue = AmqpValue::Byte(-128);
+        assert_eq!(byte_value, AmqpValue::Byte(-128));
+        assert_eq!(AmqpValue::Byte(-128), byte_value);
+        let byte_val: i8 = byte_value.into();
+        assert_eq!(byte_val, -128);
+
+        // Test AmqpValue::Short
+        let short_value: AmqpValue = AmqpValue::Short(-32768);
+        assert_eq!(short_value, AmqpValue::Short(-32768));
+        assert_eq!(AmqpValue::Short(-32768), short_value);
+        let short_val: i16 = short_value.into();
+        assert_eq!(short_val, -32768);
+
+        // Test AmqpValue::Int
+        let int_value: AmqpValue = AmqpValue::Int(-2147483648);
+        assert_eq!(int_value, AmqpValue::Int(-2147483648));
+        assert_eq!(AmqpValue::Int(-2147483648), int_value);
+        let int_val: i32 = int_value.into();
+        assert_eq!(int_val, -2147483648);
+
+        // Test AmqpValue::Long
+        let long_value: AmqpValue = AmqpValue::Long(-9223372036854775808);
+        assert_eq!(long_value, AmqpValue::Long(-9223372036854775808));
+        assert_eq!(AmqpValue::Long(-9223372036854775808), long_value);
+        let long_val: i64 = long_value.into();
+        assert_eq!(long_val, -9223372036854775808);
+
+        // Test AmqpValue::Float
+        let float_value: AmqpValue = AmqpValue::Float(3.14);
+        assert_eq!(float_value, AmqpValue::Float(3.14));
+        assert_eq!(AmqpValue::Float(3.14), float_value);
+        let float_val: f32 = float_value.into();
+        assert_eq!(float_val, 3.14);
+
+        // Test AmqpValue::Double
+        let double_value: AmqpValue = AmqpValue::Double(3.14159);
+        assert_eq!(double_value, AmqpValue::Double(3.14159));
+        assert_eq!(AmqpValue::Double(3.14159), double_value);
+        let double_val: f64 = double_value.into();
+        assert_eq!(double_val, 3.14159);
+
+        // Test AmqpValue::Char
+        let char_value: AmqpValue = AmqpValue::Char('a');
+        assert_eq!(char_value, AmqpValue::Char('a'));
+        assert_eq!(AmqpValue::Char('a'), char_value);
+        let char_val: char = char_value.into();
+        assert_eq!(char_val, 'a');
+
+        // Test AmqpValue::TimeStamp
+        let timestamp = std::time::SystemTime::now();
+        let timestamp_value: AmqpValue = AmqpValue::TimeStamp(AmqpTimestamp(timestamp));
+        assert_eq!(
+            timestamp_value,
+            AmqpValue::TimeStamp(AmqpTimestamp(timestamp))
+        );
+        assert_eq!(
+            AmqpValue::TimeStamp(AmqpTimestamp(timestamp)),
+            timestamp_value
+        );
+        let timestamp_val: AmqpTimestamp = timestamp_value.into();
+        assert_eq!(timestamp_val, AmqpTimestamp(timestamp));
+
+        // Test AmqpValue::Uuid
+        let uuid = uuid::Uuid::new_v4();
+        let uuid_value: AmqpValue = AmqpValue::Uuid(uuid);
+        assert_eq!(uuid_value, AmqpValue::Uuid(uuid));
+        assert_eq!(AmqpValue::Uuid(uuid), uuid_value);
+        let uuid_val: uuid::Uuid = uuid_value.into();
+        assert_eq!(uuid_val, uuid);
+
+        // Test AmqpValue::Binary
+        let binary_value: AmqpValue = AmqpValue::Binary(vec![1, 2, 3]);
+        assert_eq!(binary_value, AmqpValue::Binary(vec![1, 2, 3]));
+        assert_eq!(AmqpValue::Binary(vec![1, 2, 3]), binary_value);
+        let binary_val: Vec<u8> = binary_value.into();
+        assert_eq!(binary_val, vec![1, 2, 3]);
+
+        // Test AmqpValue::String
+        let string_value: AmqpValue = AmqpValue::String("hello".to_string());
+        assert_eq!(string_value, AmqpValue::String("hello".to_string()));
+        assert_eq!(AmqpValue::String("hello".to_string()), string_value);
+        let string_val: String = string_value.into();
+        assert_eq!(string_val, "hello");
+
+        // Test AmqpValue::Symbol
+        let symbol_value: AmqpValue = AmqpValue::Symbol(AmqpSymbol("hello".to_string()));
+        assert_eq!(
+            symbol_value,
+            AmqpValue::Symbol(AmqpSymbol("hello".to_string()))
+        );
+        assert_eq!(
+            AmqpValue::Symbol(AmqpSymbol("hello".to_string())),
+            symbol_value
+        );
+        let symbol_val: AmqpSymbol = symbol_value.into();
+        assert_eq!(symbol_val, AmqpSymbol("hello".to_string()));
+
+        // Test AmqpValue::List
+        let list_value: AmqpValue =
+            AmqpValue::List(AmqpList(vec![AmqpValue::Int(1), AmqpValue::Int(2)]));
+        assert_eq!(
+            list_value,
+            AmqpValue::List(AmqpList(vec![AmqpValue::Int(1), AmqpValue::Int(2)]))
+        );
+        assert_eq!(
+            AmqpValue::List(AmqpList(vec![AmqpValue::Int(1), AmqpValue::Int(2)])),
+            list_value
+        );
+        let list_val: AmqpList = list_value.into();
+        assert_eq!(
+            list_val,
+            AmqpList(vec![AmqpValue::Int(1), AmqpValue::Int(2)])
+        );
+
+        // Test AmqpValue::Map
+        let map_value: AmqpValue = AmqpValue::Map(AmqpOrderedMap::new());
+        assert_eq!(map_value, AmqpValue::Map(AmqpOrderedMap::new()));
+        assert_eq!(AmqpValue::Map(AmqpOrderedMap::new()), map_value);
+        let map_val: AmqpOrderedMap<AmqpValue, AmqpValue> = map_value.into();
+        assert_eq!(map_val, AmqpOrderedMap::new());
+
+        // Test AmqpValue::Array
+        let array_value: AmqpValue = AmqpValue::Array(vec![AmqpValue::Int(1), AmqpValue::Int(2)]);
+        assert_eq!(
+            array_value,
+            AmqpValue::Array(vec![AmqpValue::Int(1), AmqpValue::Int(2)])
+        );
+        assert_eq!(
+            AmqpValue::Array(vec![AmqpValue::Int(1), AmqpValue::Int(2)]),
+            array_value
+        );
+        let array_val: Vec<AmqpValue> = array_value.into();
+        assert_eq!(array_val, vec![AmqpValue::Int(1), AmqpValue::Int(2)]);
+
+        // Test AmqpValue::Described
+        let described_value: AmqpValue = AmqpValue::Described(Box::new(AmqpDescribed {
+            descriptor: AmqpDescriptor::Code(23),
+            value: AmqpValue::Int(2),
+        }));
+        assert_eq!(
+            described_value,
+            AmqpValue::Described(Box::new(AmqpDescribed {
+                descriptor: AmqpDescriptor::Code(23),
+                value: AmqpValue::Int(2),
+            }))
+        );
+        assert_eq!(
+            AmqpValue::Described(Box::new(AmqpDescribed {
+                descriptor: AmqpDescriptor::Code(23),
+                value: AmqpValue::Int(2),
+            })),
+            described_value
+        );
+        let described_val: AmqpDescribed = described_value.into();
+        assert_eq!(
+            described_val,
+            AmqpDescribed {
+                descriptor: AmqpDescriptor::Code(23),
+                value: AmqpValue::Int(2),
+            }
+        );
+
+        // Test AmqpValue::Unknown
+        let unknown_value: AmqpValue = AmqpValue::Unknown;
+        assert_eq!(unknown_value, AmqpValue::Unknown);
+        assert_eq!(AmqpValue::Unknown, unknown_value);
     }
 }

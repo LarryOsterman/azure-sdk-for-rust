@@ -389,6 +389,96 @@ impl From<AmqpOrderedMap<AmqpValue, AmqpValue>>
     }
 }
 
+impl From<AmqpOrderedMap<AmqpSymbol, AmqpValue>>
+    for fe2o3_amqp_types::primitives::OrderedMap<
+        fe2o3_amqp_types::primitives::Symbol,
+        fe2o3_amqp_types::primitives::Value,
+    >
+{
+    fn from(value: AmqpOrderedMap<AmqpSymbol, AmqpValue>) -> Self {
+        // Convert the AmqpOrderedMap to OrderedMap
+        let mut ordered_map = fe2o3_amqp_types::primitives::OrderedMap::new();
+        for (key, value) in value.into_iter() {
+            ordered_map.insert(key.into(), value.into());
+        }
+        ordered_map
+    }
+}
+
+impl From<crate::amqp_client::SenderSettleMode>
+    for fe2o3_amqp_types::definitions::SenderSettleMode
+{
+    fn from(
+        mode: crate::amqp_client::SenderSettleMode,
+    ) -> fe2o3_amqp_types::definitions::SenderSettleMode {
+        match mode {
+            crate::amqp_client::SenderSettleMode::Mixed => {
+                fe2o3_amqp_types::definitions::SenderSettleMode::Mixed
+            }
+            crate::amqp_client::SenderSettleMode::Settled => {
+                fe2o3_amqp_types::definitions::SenderSettleMode::Settled
+            }
+            crate::amqp_client::SenderSettleMode::Unsettled => {
+                fe2o3_amqp_types::definitions::SenderSettleMode::Unsettled
+            }
+        }
+    }
+}
+
+impl From<fe2o3_amqp_types::definitions::SenderSettleMode>
+    for crate::amqp_client::SenderSettleMode
+{
+    fn from(
+        mode: fe2o3_amqp_types::definitions::SenderSettleMode,
+    ) -> crate::amqp_client::SenderSettleMode {
+        match mode {
+            fe2o3_amqp_types::definitions::SenderSettleMode::Mixed => {
+                crate::amqp_client::SenderSettleMode::Mixed
+            }
+            fe2o3_amqp_types::definitions::SenderSettleMode::Settled => {
+                crate::amqp_client::SenderSettleMode::Settled
+            }
+            fe2o3_amqp_types::definitions::SenderSettleMode::Unsettled => {
+                crate::amqp_client::SenderSettleMode::Unsettled
+            }
+        }
+    }
+}
+
+impl From<crate::amqp_client::ReceiverSettleMode>
+    for fe2o3_amqp_types::definitions::ReceiverSettleMode
+{
+    fn from(
+        mode: crate::amqp_client::ReceiverSettleMode,
+    ) -> fe2o3_amqp_types::definitions::ReceiverSettleMode {
+        match mode {
+            crate::amqp_client::ReceiverSettleMode::First => {
+                fe2o3_amqp_types::definitions::ReceiverSettleMode::First
+            }
+            crate::amqp_client::ReceiverSettleMode::Second => {
+                fe2o3_amqp_types::definitions::ReceiverSettleMode::Second
+            }
+        }
+    }
+}
+
+impl From<fe2o3_amqp_types::definitions::ReceiverSettleMode>
+    for crate::amqp_client::ReceiverSettleMode
+{
+    fn from(
+        mode: fe2o3_amqp_types::definitions::ReceiverSettleMode,
+    ) -> crate::amqp_client::ReceiverSettleMode {
+        match mode {
+            fe2o3_amqp_types::definitions::ReceiverSettleMode::First => {
+                crate::amqp_client::ReceiverSettleMode::First
+            }
+            fe2o3_amqp_types::definitions::ReceiverSettleMode::Second => {
+                crate::amqp_client::ReceiverSettleMode::Second
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

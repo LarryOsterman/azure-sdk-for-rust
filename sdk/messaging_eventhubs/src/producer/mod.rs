@@ -5,7 +5,7 @@ use crate::{
         cbs::{AmqpClaimsBasedSecurity, AmqpClaimsBasedSecurityTrait},
         connection::{AmqpConnection, AmqpConnectionOptions, AmqpConnectionTrait},
         management::{AmqpManagement, AmqpManagementTrait},
-        sender::{AmqpSender, AmqpSenderOptions},
+        sender::{AmqpSender, AmqpSenderOptions, AmqpSenderTrait},
         session::{AmqpSession, AmqpSessionOptions, AmqpSessionTrait},
         value::{AmqpOrderedMap, AmqpTimestamp, AmqpValue},
     },
@@ -162,8 +162,6 @@ impl ProducerClient {
 
     pub async fn get_eventhub_properties(&self) -> Result<EventHubProperties> {
         self.ensure_management_client().await?;
-        let management_url = self.url.clone() + "/$management";
-        let access_token = self.authorize_path(management_url).await?;
 
         let mut application_properties: AmqpOrderedMap<String, AmqpValue> = AmqpOrderedMap::new();
         application_properties.insert("name".to_string(), self.eventhub.clone().into());
@@ -214,7 +212,6 @@ impl ProducerClient {
         &self,
         partition_id: impl Into<String>,
     ) -> Result<EventHubPartitionProperties> {
-        let access_token = self.authorize_path(&self.url).await?;
         self.ensure_management_client().await?;
 
         let partition_id: String = partition_id.into();
@@ -344,7 +341,10 @@ impl ProducerClient {
         let path: String = path.into();
         let mut sender_instances = self.sender_instances.lock().await;
         if !sender_instances.contains_key(&path) {
+            self.ensure_connection(&path).await?;
             let connection = self.connection.get().unwrap();
+
+            self.authorize_path(path.clone()).await?;
             let session = AmqpSession::new();
             session
                 .begin(
@@ -357,12 +357,17 @@ impl ProducerClient {
                     ),
                 )
                 .await?;
-            let sender = session
-                .create_sender(
+            let sender = AmqpSender::new();
+            sender
+                .attach(
+                    &session,
+                    format!(
+                        "{}-rust-sender",
+                        self.options.application_id.as_ref().unwrap()
+                    ),
                     path.clone(),
                     Some(
                         AmqpSenderOptions::builder()
-                            .with_name(format!("{:?}-sender", self.fully_qualified_namespace))
                             .with_max_message_size(
                                 self.options.max_message_size.unwrap_or(std::u64::MAX),
                             )

@@ -2,16 +2,267 @@
 
 // cspell: words amqp servicebus eventhub mgmt
 
-use fe2o3_amqp_types::messaging::annotations::OwnedKey;
+use fe2o3_amqp_types::{definitions::Fields, messaging::annotations::OwnedKey};
 use serde_amqp::Value;
 
 use crate::amqp_client::{
     messaging::{
         AmqpAnnotationKey, AmqpAnnotations, AmqpApplicationProperties, AmqpMessage,
-        AmqpMessageBody, AmqpMessageHeader, AmqpMessageId, AmqpMessageProperties,
+        AmqpMessageBody, AmqpMessageHeader, AmqpMessageId, AmqpMessageProperties, AmqpOutcome,
+        AmqpSource,
     },
-    value::{AmqpOrderedMap, AmqpValue},
+    value::{AmqpOrderedMap, AmqpSymbol, AmqpValue},
 };
+
+impl From<fe2o3_amqp_types::messaging::Outcome> for AmqpOutcome {
+    fn from(outcome: fe2o3_amqp_types::messaging::Outcome) -> Self {
+        match outcome {
+            fe2o3_amqp_types::messaging::Outcome::Accepted(_) => AmqpOutcome::Accepted,
+            fe2o3_amqp_types::messaging::Outcome::Released(_) => AmqpOutcome::Released,
+            fe2o3_amqp_types::messaging::Outcome::Rejected(_) => AmqpOutcome::Rejected,
+            fe2o3_amqp_types::messaging::Outcome::Modified(_) => AmqpOutcome::Modified,
+        }
+    }
+}
+
+impl From<AmqpOutcome> for fe2o3_amqp_types::messaging::Outcome {
+    fn from(outcome: AmqpOutcome) -> Self {
+        match outcome {
+            AmqpOutcome::Accepted => fe2o3_amqp_types::messaging::Outcome::Accepted(
+                fe2o3_amqp_types::messaging::Accepted {},
+            ),
+            AmqpOutcome::Released => fe2o3_amqp_types::messaging::Outcome::Released(
+                fe2o3_amqp_types::messaging::Released {},
+            ),
+            AmqpOutcome::Rejected => fe2o3_amqp_types::messaging::Outcome::Rejected(
+                fe2o3_amqp_types::messaging::Rejected { error: None },
+            ),
+            AmqpOutcome::Modified => fe2o3_amqp_types::messaging::Outcome::Modified(
+                fe2o3_amqp_types::messaging::Modified {
+                    delivery_failed: None,
+                    undeliverable_here: None,
+                    message_annotations: None,
+                },
+            ),
+        }
+    }
+}
+
+impl From<fe2o3_amqp_types::messaging::TerminusDurability>
+    for crate::amqp_client::messaging::TerminusDurability
+{
+    fn from(durability: fe2o3_amqp_types::messaging::TerminusDurability) -> Self {
+        match durability {
+            fe2o3_amqp_types::messaging::TerminusDurability::None => {
+                crate::amqp_client::messaging::TerminusDurability::None
+            }
+            fe2o3_amqp_types::messaging::TerminusDurability::Configuration => {
+                crate::amqp_client::messaging::TerminusDurability::Configuration
+            }
+            fe2o3_amqp_types::messaging::TerminusDurability::UnsettledState => {
+                crate::amqp_client::messaging::TerminusDurability::UnsettledState
+            }
+        }
+    }
+}
+
+impl From<crate::amqp_client::messaging::TerminusDurability>
+    for fe2o3_amqp_types::messaging::TerminusDurability
+{
+    fn from(durability: crate::amqp_client::messaging::TerminusDurability) -> Self {
+        match durability {
+            crate::amqp_client::messaging::TerminusDurability::None => {
+                fe2o3_amqp_types::messaging::TerminusDurability::None
+            }
+            crate::amqp_client::messaging::TerminusDurability::Configuration => {
+                fe2o3_amqp_types::messaging::TerminusDurability::Configuration
+            }
+            crate::amqp_client::messaging::TerminusDurability::UnsettledState => {
+                fe2o3_amqp_types::messaging::TerminusDurability::UnsettledState
+            }
+        }
+    }
+}
+
+impl From<fe2o3_amqp_types::messaging::TerminusExpiryPolicy>
+    for crate::amqp_client::messaging::TerminusExpiryPolicy
+{
+    fn from(expiry_policy: fe2o3_amqp_types::messaging::TerminusExpiryPolicy) -> Self {
+        match expiry_policy {
+            fe2o3_amqp_types::messaging::TerminusExpiryPolicy::LinkDetach => {
+                crate::amqp_client::messaging::TerminusExpiryPolicy::LinkDetach
+            }
+            fe2o3_amqp_types::messaging::TerminusExpiryPolicy::SessionEnd => {
+                crate::amqp_client::messaging::TerminusExpiryPolicy::SessionEnd
+            }
+            fe2o3_amqp_types::messaging::TerminusExpiryPolicy::ConnectionClose => {
+                crate::amqp_client::messaging::TerminusExpiryPolicy::ConnectionClose
+            }
+            fe2o3_amqp_types::messaging::TerminusExpiryPolicy::Never => {
+                crate::amqp_client::messaging::TerminusExpiryPolicy::Never
+            }
+        }
+    }
+}
+
+impl From<crate::amqp_client::messaging::TerminusExpiryPolicy>
+    for fe2o3_amqp_types::messaging::TerminusExpiryPolicy
+{
+    fn from(expiry_policy: crate::amqp_client::messaging::TerminusExpiryPolicy) -> Self {
+        match expiry_policy {
+            crate::amqp_client::messaging::TerminusExpiryPolicy::LinkDetach => {
+                fe2o3_amqp_types::messaging::TerminusExpiryPolicy::LinkDetach
+            }
+            crate::amqp_client::messaging::TerminusExpiryPolicy::SessionEnd => {
+                fe2o3_amqp_types::messaging::TerminusExpiryPolicy::SessionEnd
+            }
+            crate::amqp_client::messaging::TerminusExpiryPolicy::ConnectionClose => {
+                fe2o3_amqp_types::messaging::TerminusExpiryPolicy::ConnectionClose
+            }
+            crate::amqp_client::messaging::TerminusExpiryPolicy::Never => {
+                fe2o3_amqp_types::messaging::TerminusExpiryPolicy::Never
+            }
+        }
+    }
+}
+
+impl From<fe2o3_amqp_types::messaging::DistributionMode>
+    for crate::amqp_client::messaging::DistributionMode
+{
+    fn from(distribution_mode: fe2o3_amqp_types::messaging::DistributionMode) -> Self {
+        match distribution_mode {
+            fe2o3_amqp_types::messaging::DistributionMode::Move => {
+                crate::amqp_client::messaging::DistributionMode::Move
+            }
+            fe2o3_amqp_types::messaging::DistributionMode::Copy => {
+                crate::amqp_client::messaging::DistributionMode::Copy
+            }
+        }
+    }
+}
+
+impl From<crate::amqp_client::messaging::DistributionMode>
+    for fe2o3_amqp_types::messaging::DistributionMode
+{
+    fn from(distribution_mode: crate::amqp_client::messaging::DistributionMode) -> Self {
+        match distribution_mode {
+            crate::amqp_client::messaging::DistributionMode::Move => {
+                fe2o3_amqp_types::messaging::DistributionMode::Move
+            }
+            crate::amqp_client::messaging::DistributionMode::Copy => {
+                fe2o3_amqp_types::messaging::DistributionMode::Copy
+            }
+        }
+    }
+}
+
+impl From<AmqpSource> for fe2o3_amqp_types::messaging::Source {
+    fn from(source: AmqpSource) -> Self {
+        let mut builder = fe2o3_amqp_types::messaging::Source::builder();
+
+        if let Some(address) = source.address {
+            builder = builder.address(address);
+        }
+        if let Some(durable) = source.durable {
+            builder = builder.durable(durable.into());
+        }
+        if let Some(expiry_policy) = source.expiry_policy {
+            builder = builder.expiry_policy(expiry_policy.into());
+        }
+        if let Some(timeout) = source.timeout {
+            builder = builder.timeout(timeout.into());
+        }
+        if let Some(dynamic) = source.dynamic {
+            builder = builder.dynamic(dynamic);
+        }
+        if let Some(dynamic_node_properties) = source.dynamic_node_properties {
+            let fields: Fields = Fields::new();
+            let fields = dynamic_node_properties
+                .into_iter()
+                .fold(fields, |mut fields, (k, v)| {
+                    fields.insert(k.into(), v.into());
+                    fields
+                });
+
+            builder = builder.dynamic_node_properties(fields);
+        }
+        if let Some(distribution_mode) = source.distribution_mode {
+            builder = builder.distribution_mode(distribution_mode.into());
+        }
+        if let Some(filter) = source.filter {
+            builder = builder.filter(
+                filter
+                    .into_iter()
+                    .map(|(k, v)| (k.into(), v.into()))
+                    .collect(),
+            );
+        }
+        if let Some(default_outcome) = source.default_outcome {
+            builder = builder.default_outcome(default_outcome.into());
+        }
+        if let Some(outcomes) = source.outcomes {
+            let outcomes: fe2o3_amqp_types::primitives::Array<
+                fe2o3_amqp_types::primitives::Symbol,
+            > = outcomes.into_iter().map(|o| o.into()).collect();
+            builder = builder.outcomes(outcomes);
+        }
+        if let Some(capabilities) = source.capabilities {
+            let capabilities: fe2o3_amqp_types::primitives::Array<
+                fe2o3_amqp_types::primitives::Symbol,
+            > = capabilities.into_iter().map(|c| c.into()).collect();
+            builder = builder.capabilities(capabilities);
+        }
+        builder.build()
+    }
+}
+
+impl From<fe2o3_amqp_types::messaging::Source> for AmqpSource {
+    fn from(source: fe2o3_amqp_types::messaging::Source) -> Self {
+        let mut amqp_source_builder = AmqpSource::builder();
+
+        if let Some(address) = source.address {
+            amqp_source_builder = amqp_source_builder.with_address(address);
+        }
+        amqp_source_builder = amqp_source_builder
+            .with_durable(source.durable.into())
+            .with_expiry_policy(source.expiry_policy.into())
+            .with_timeout(source.timeout.into())
+            .with_dynamic(source.dynamic);
+
+        if let Some(dynamic_node_properties) = source.dynamic_node_properties {
+            let dynamic_node_properties: AmqpOrderedMap<AmqpSymbol, AmqpValue> =
+                dynamic_node_properties
+                    .into_iter()
+                    .map(|(k, v)| (k.into(), v.into()))
+                    .collect();
+            amqp_source_builder =
+                amqp_source_builder.with_dynamic_node_properties(dynamic_node_properties);
+        }
+        if let Some(distribution_mode) = source.distribution_mode {
+            amqp_source_builder =
+                amqp_source_builder.with_distribution_mode(distribution_mode.into());
+        }
+        if let Some(filter) = source.filter {
+            let filter: AmqpOrderedMap<AmqpSymbol, AmqpValue> = filter
+                .into_iter()
+                .map(|(k, v)| (k.into(), v.into()))
+                .collect();
+            amqp_source_builder = amqp_source_builder.with_filter(filter);
+        }
+        if let Some(default_outcome) = source.default_outcome {
+            amqp_source_builder = amqp_source_builder.with_default_outcome(default_outcome.into());
+        }
+        if let Some(outcomes) = source.outcomes {
+            amqp_source_builder =
+                amqp_source_builder.with_outcomes(outcomes.into_iter().map(|o| o.into()).collect());
+        }
+        if let Some(capabilities) = source.capabilities {
+            amqp_source_builder = amqp_source_builder
+                .with_capabilities(capabilities.into_iter().map(|c| c.into()).collect());
+        }
+        amqp_source_builder.build()
+    }
+}
 
 impl From<fe2o3_amqp_types::messaging::MessageId> for AmqpMessageId {
     fn from(message_id: fe2o3_amqp_types::messaging::MessageId) -> Self {

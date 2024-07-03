@@ -151,3 +151,27 @@ async fn test_create_batch() {
         assert_eq!(batch.len(), 0);
     }
 }
+
+#[test]
+fn test_create_eventdata() {
+    common::setup();
+    let data = b"hello world";
+    let ed1 = azure_messaging_eventhubs::models::EventData::builder()
+        .with_body(data.to_vec())
+        .build();
+
+    assert_eq!(ed1.body().unwrap(), data.to_vec());
+    assert!(ed1.content_type().is_none());
+    assert!(ed1.correlation_id().is_none());
+    assert!(ed1.message_id().is_none());
+    assert!(ed1.properties().is_none());
+
+    let data = b"hello world";
+    let _ = azure_messaging_eventhubs::models::EventData::builder()
+        .with_body(data.to_vec())
+        .with_content_type("text/plain")
+        .with_correlation_id("correlation_id")
+        .with_message_id(35u64)
+        .add_property("key", "value")
+        .build();
+}

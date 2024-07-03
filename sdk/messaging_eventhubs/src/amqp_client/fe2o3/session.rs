@@ -3,8 +3,6 @@
 use super::error::AmqpBeginError;
 use crate::amqp_client::{
     connection::AmqpConnection,
-    messaging::AmqpTarget,
-    sender::{AmqpSender, AmqpSenderOptions},
     session::{AmqpSessionOptions, AmqpSessionTrait},
 };
 use azure_core::Result;
@@ -99,14 +97,6 @@ impl AmqpSessionTrait for Fe2o3AmqpSession {
     }
 
     async fn end(&self) -> Result<()> {
-        todo!()
-    }
-
-    async fn create_sender(
-        &self,
-        target: impl Into<AmqpTarget>,
-        options: Option<AmqpSenderOptions>,
-    ) -> Result<AmqpSender> {
         todo!()
     }
 }

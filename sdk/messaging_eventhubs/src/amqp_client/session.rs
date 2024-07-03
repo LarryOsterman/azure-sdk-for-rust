@@ -2,8 +2,6 @@
 
 use super::{
     connection::AmqpConnection,
-    messaging::AmqpTarget,
-    sender::{AmqpSender, AmqpSenderOptions},
     value::{AmqpOrderedMap, AmqpSymbol, AmqpValue},
 };
 use azure_core::error::Result;
@@ -27,7 +25,7 @@ impl AmqpSessionOptions {
     }
 }
 
-#[allow(dead_code)]
+#[allow(unused_variables)]
 pub(crate) trait AmqpSessionTrait {
     async fn begin(
         &self,
@@ -37,13 +35,6 @@ pub(crate) trait AmqpSessionTrait {
         unimplemented!()
     }
     async fn end(&self) -> Result<()> {
-        unimplemented!()
-    }
-    async fn create_sender(
-        &self,
-        target: impl Into<AmqpTarget>,
-        options: Option<AmqpSenderOptions>,
-    ) -> Result<AmqpSender> {
         unimplemented!()
     }
 }
@@ -81,19 +72,11 @@ impl AmqpSessionTrait for AmqpSession {
     async fn end(&self) -> Result<()> {
         self.0 .0.end().await
     }
-    async fn create_sender(
-        &self,
-        target: impl Into<AmqpTarget>,
-        options: Option<AmqpSenderOptions>,
-    ) -> Result<AmqpSender> {
-        Ok(self.0 .0.create_sender(target, options).await?)
-    }
 }
 
 impl AmqpSession {
     pub(crate) fn new() -> Self {
-        let inner = SessionImplementation::new();
-        Self(AmqpSessionImpl::new(inner))
+        Self(AmqpSessionImpl::new(SessionImplementation::new()))
     }
 }
 

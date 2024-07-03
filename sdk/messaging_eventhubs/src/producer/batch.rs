@@ -2,6 +2,7 @@
 
 use super::ProducerClient;
 
+use crate::amqp_client::sender::AmqpSenderTrait;
 use crate::models::EventData;
 use azure_core::error::Result;
 
@@ -35,7 +36,7 @@ impl<'a> EventDataBatch<'a> {
 
     pub(crate) async fn attach(&mut self) -> Result<()> {
         let sender = self.producer.ensure_sender(self.get_batch_path()).await?;
-        self.max_size_in_bytes = sender.lock().await.max_message_size().unwrap();
+        self.max_size_in_bytes = sender.lock().await.max_message_size().await.unwrap();
         Ok(())
     }
 

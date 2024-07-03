@@ -87,12 +87,12 @@ pub struct AmqpSource {
     pub expiry_policy: Option<TerminusExpiryPolicy>,
     pub timeout: Option<u32>,
     pub dynamic: Option<bool>,
-    pub dynamic_node_properties: Option<AmqpOrderedMap<String, AmqpValue>>,
+    pub dynamic_node_properties: Option<AmqpOrderedMap<AmqpSymbol, AmqpValue>>,
     pub distribution_mode: Option<DistributionMode>,
-    pub filter: Option<AmqpOrderedMap<String, AmqpValue>>,
+    pub filter: Option<AmqpOrderedMap<AmqpSymbol, AmqpValue>>,
     pub default_outcome: Option<AmqpOutcome>,
     pub outcomes: Option<Vec<AmqpSymbol>>,
-    pub capabilities: Option<Vec<AmqpValue>>,
+    pub capabilities: Option<Vec<AmqpSymbol>>,
 }
 
 impl AmqpSource {
@@ -357,7 +357,7 @@ pub mod builders {
         }
         pub fn with_dynamic_node_properties(
             mut self,
-            dynamic_node_properties: impl Into<AmqpOrderedMap<String, AmqpValue>>,
+            dynamic_node_properties: impl Into<AmqpOrderedMap<AmqpSymbol, AmqpValue>>,
         ) -> Self {
             self.source.dynamic_node_properties = Some(dynamic_node_properties.into());
             self
@@ -366,7 +366,10 @@ pub mod builders {
             self.source.distribution_mode = Some(distribution_mode);
             self
         }
-        pub fn with_filter(mut self, filter: impl Into<AmqpOrderedMap<String, AmqpValue>>) -> Self {
+        pub fn with_filter(
+            mut self,
+            filter: impl Into<AmqpOrderedMap<AmqpSymbol, AmqpValue>>,
+        ) -> Self {
             self.source.filter = Some(filter.into());
             self
         }
@@ -376,6 +379,10 @@ pub mod builders {
         }
         pub fn with_outcomes(mut self, outcomes: Vec<AmqpSymbol>) -> Self {
             self.source.outcomes = Some(outcomes);
+            self
+        }
+        pub fn with_capabilities(mut self, capabilities: Vec<AmqpSymbol>) -> Self {
+            self.source.capabilities = Some(capabilities);
             self
         }
     }
