@@ -2,7 +2,7 @@
 
 // cspell: words amqp servicebus eventhub mgmt
 
-use fe2o3_amqp_types::messaging::{annotations::OwnedKey, IntoBody};
+use fe2o3_amqp_types::messaging::annotations::OwnedKey;
 use serde_amqp::Value;
 
 use crate::amqp_client::{
