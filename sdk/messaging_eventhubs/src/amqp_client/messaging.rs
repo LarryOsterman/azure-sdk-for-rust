@@ -1,8 +1,11 @@
 //cspell: words amqp
 
-use crate::amqp_client::value::{AmqpList, AmqpOrderedMap, AmqpValue};
-
 use super::value::{AmqpSymbol, AmqpTimestamp};
+use crate::amqp_client::{
+    fe2o3::error::AmqpSerializationError,
+    value::{AmqpList, AmqpOrderedMap, AmqpValue},
+};
+use azure_core::error::Result;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TerminusDurability {
@@ -304,6 +307,24 @@ impl AmqpMessage {
 
     pub fn footer(&self) -> Option<&AmqpAnnotations> {
         self.footer.as_ref()
+    }
+
+    pub fn serialize(message: AmqpMessage) -> Result<Vec<u8>> {
+        #[cfg(any(feature = "enable-fe2o3-amqp"))]
+        {
+            let amqp_message = Into::<
+                fe2o3_amqp_types::messaging::Message<
+                    fe2o3_amqp_types::messaging::Body<fe2o3_amqp_types::primitives::Value>,
+                >,
+            >::into(message);
+            let res = serde_amqp::ser::to_vec(
+                &fe2o3_amqp_types::messaging::message::__private::Serializable(amqp_message),
+            )
+            .map_err(AmqpSerializationError::from)?;
+            Ok(res)
+        }
+        #[cfg(not(any(feature = "enable-fe2o3-amqp")))]
+        unimplemented!()
     }
 }
 

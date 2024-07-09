@@ -46,7 +46,7 @@ macro_rules! impl_from_external_error {
     }
 }
 impl_from_external_error! {
-//   AmqpSerializationError, serde_amqp::error::Error
+   AmqpSerializationError, serde_amqp::error::Error,
     TimeError, time::error::ComponentRange,
     AmqpSessionError, fe2o3_amqp::session::Error,
     AmqpLinkDetachError, fe2o3_amqp::link::DetachError,
@@ -77,6 +77,7 @@ pub enum AmqpNotAcceptedError {
 }
 
 pub enum ErrorKind {
+    AmqpSerializationError { source: AmqpSerializationError },
     AmqpDeliveryRejectedError { source: AmqpDeliveryRejectedError },
     NotAcceptedError { source: AmqpNotAcceptedError },
     TimeError { source: TimeError },
@@ -148,9 +149,10 @@ impl std::fmt::Display for Fe2o3AmqpError {
             }
             ErrorKind::AmqpSenderSendError { source } => {
                 write!(f, "Sender send error {:?}", source.0)
-            } // ErrorKind::AmqpSerializationError { source } => {
-              //     write!(f, "Serialization error: {:?}", source.0)
-              // }
+            }
+            ErrorKind::AmqpSerializationError { source } => {
+                write!(f, "Serialization error: {:?}", source.0)
+            }
         }
     }
 }
