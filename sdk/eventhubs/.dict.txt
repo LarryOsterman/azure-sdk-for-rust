@@ -2,3 +2,5 @@ amqps
 consts
 eventdata
 mgmt
+eventhubs
+azurecli

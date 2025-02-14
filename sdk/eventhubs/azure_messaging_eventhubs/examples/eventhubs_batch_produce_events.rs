@@ -1,14 +1,18 @@
 /// This sample demonstrates how to send events to all partitions using a batch sender.
 ///
+use azure_core::Result;
 use azure_identity::DefaultAzureCredential;
 use azure_messaging_eventhubs::{models::EventData, EventDataBatchOptions, ProducerClient};
+use std::env;
 use uuid::Uuid;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     // Set up the Event Hubs client
-    let eventhub_namespace = std::env::var("EVENTHUBS_HOST")?;
-    let eventhub_name = std::env::var("EVENTHUB_NAME")?;
+    let eventhub_namespace =
+        env::var("EVENTHUBS_HOST").expect("Could not find EVENTHUBS_HOST environment variable.");
+    let eventhub_name =
+        env::var("EVENTHUB_NAME").expect("Could not find EVENTHUB_NAME environment variable.");
     let credential = DefaultAzureCredential::new()?;
 
     let client = ProducerClient::builder()

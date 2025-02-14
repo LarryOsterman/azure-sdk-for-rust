@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation. All Rights reserved
 // Licensed under the MIT license.
 
-use azure_core::error::Result;
+use azure_core::Result;
 use azure_identity::DefaultAzureCredential;
 use azure_messaging_eventhubs::ProducerClient;
 
@@ -12,8 +12,10 @@ async fn main() -> Result<()> {
     // Initialize tracing subscriber from environment.
     tracing_subscriber::fmt().init();
 
-    let host = env::var("EVENTHUBS_HOST").unwrap();
-    let eventhub = env::var("EVENTHUB_NAME").unwrap();
+    let host =
+        env::var("EVENTHUBS_HOST").expect("Could not find EVENTHUBS_HOST environment variable.");
+    let eventhub =
+        env::var("EVENTHUB_NAME").expect("Could not find EVENTHUB_NAME environment variable.");
 
     let credential = DefaultAzureCredential::new()?;
 

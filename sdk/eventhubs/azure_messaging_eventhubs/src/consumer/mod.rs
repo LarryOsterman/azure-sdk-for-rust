@@ -70,7 +70,7 @@ impl ConsumerClient {
     ///
     /// ```no_run
     /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn main() -> Result<(), azure_core::Error> {
     /// use azure_messaging_eventhubs::ConsumerClient;
     /// use azure_identity::{DefaultAzureCredential, TokenCredentialOptions};
     ///
@@ -185,7 +185,7 @@ impl ConsumerClient {
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), azure_core::Error> {
-    ///   let fully_qualified_namespace = "my_eventhub_host.servicebus.windows.net")?;
+    ///   let fully_qualified_namespace = "my_eventhub_host.servicebus.windows.net";
     ///   let eventhub_name = "my_eventhub_name";
     ///     let my_credential = DefaultAzureCredential::new()?;
     ///     let consumer = ConsumerClient::builder()
