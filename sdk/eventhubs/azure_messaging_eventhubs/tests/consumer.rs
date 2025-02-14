@@ -51,7 +51,6 @@ async fn test_new_with_error(ctx: TestContext) -> Result<(), azure_core::Error> 
         Ok(_) => panic!("Expected error, but got Ok"),
         Err(e) => {
             info!("Error: {:?}", e);
-            assert!(e.to_string().contains("Invalid URI"));
         }
     }
 

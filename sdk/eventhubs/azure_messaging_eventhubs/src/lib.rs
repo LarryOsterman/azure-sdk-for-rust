@@ -19,6 +19,8 @@ pub(crate) mod producer;
 /// Types sent to and received from the Event Hubs service.
 pub mod models;
 
+pub use error::{ErrorKind, EventHubsError};
+
 pub use producer::{
     batch::{EventDataBatch, EventDataBatchOptions},
     ProducerClient, SendBatchOptions, SendEventOptions, SendMessageOptions,

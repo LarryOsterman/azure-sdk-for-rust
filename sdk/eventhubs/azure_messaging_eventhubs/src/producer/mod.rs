@@ -243,7 +243,7 @@ impl ProducerClient {
     ///   let my_credentials = DefaultAzureCredential::new()?;
     ///   let producer = ProducerClient::builder()
     ///    .with_application_id("your_application_id")
-    ///    .open(fully_qualified_namespace=, eventhub_name, my_credentials.clone()).await?;
+    ///    .open(fully_qualified_namespace, eventhub_name, my_credentials.clone()).await?;
     ///
     ///   let batch = producer.create_batch(None).await?;
     ///
