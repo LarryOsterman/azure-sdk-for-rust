@@ -10,6 +10,7 @@ use futures::{pin_mut, StreamExt};
 use std::time::Duration;
 use tracing::{info, trace};
 mod common;
+use std::error::Error;
 
 #[recorded::test(live)]
 async fn test_new(ctx: TestContext) -> Result<(), azure_core::Error> {
@@ -51,6 +52,21 @@ async fn test_new_with_error(ctx: TestContext) -> Result<(), azure_core::Error> 
         Ok(_) => panic!("Expected error, but got Ok"),
         Err(e) => {
             info!("Error: {:?}", e);
+            assert!(e.source().is_some());
+            let eh_error = e.source();
+            if let Some(eh_error) = eh_error {
+                let eh_error = eh_error.downcast_ref::<azure_messaging_eventhubs::EventHubsError>();
+                if let Some(eh_error) = eh_error {
+                    trace!("EH error: {eh_error}");
+                } else {
+                    panic!(
+                        "Expected azure_messaging_eventhubs::Error, but got {:?}",
+                        eh_error
+                    );
+                }
+            } else {
+                panic!("Expected error, but got None");
+            }
         }
     }
 

@@ -129,7 +129,7 @@ impl ProducerClient {
     /// * `options` - The options for configuring the [`ProducerClient`].
     ///
     /// # Returns
-    /// A new instance of [`ProducerClientBuilder`].
+    /// A new instance of [`builders::ProducerClientBuilder`].
     ///
     pub fn builder() -> builders::ProducerClientBuilder {
         builders::ProducerClientBuilder::new()
