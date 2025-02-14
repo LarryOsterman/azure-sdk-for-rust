@@ -179,15 +179,17 @@ impl ConsumerClient {
     ///
     /// ```no_run
     /// use azure_messaging_eventhubs::ConsumerClient;
-    /// use azure_identity::{DefaultAzureCredential, TokenCredentialOptions};
+    /// use azure_identity::DefaultAzureCredential;
     /// use async_std::stream::StreamExt;
     /// use futures::pin_mut;
     ///
     /// #[tokio::main]
-    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// async fn main() -> Result<(), azure_core::Error> {
+    ///   let fully_qualified_namespace = "my_eventhub_host.servicebus.windows.net")?;
+    ///   let eventhub_name = "my_eventhub_name";
     ///     let my_credential = DefaultAzureCredential::new()?;
     ///     let consumer = ConsumerClient::builder()
-    ///        .open("my_namespace", "my_eventhub", my_credential).await?;
+    ///        .open(fully_qualified_namespace, eventhub_name, my_credential).await?;
     ///     let partition_id = "0";
     ///
     ///     let receiver  = consumer.open_receiver_on_partition(partition_id, None).await?;

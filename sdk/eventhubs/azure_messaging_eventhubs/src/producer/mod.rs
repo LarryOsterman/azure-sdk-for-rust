@@ -53,8 +53,8 @@ pub struct SendBatchOptions {}
 ///
 /// ```no_run
 /// use azure_messaging_eventhubs::ProducerClient;
-/// use azure_identity::{DefaultAzureCredential, TokenCredentialOptions};
-/// use std::error::Error;
+/// use azure_identity::DefaultAzureCredential;
+/// use azure_core:Error;
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -129,8 +129,8 @@ impl ProducerClient {
     /// * `options` - The options for configuring the [`ProducerClient`].
     ///
     /// # Returns
+    /// A new instance of [`ProducerClientBuilder`].
     ///
-    /// A new instance of [`ProducerClient`].
     pub fn builder() -> builders::ProducerClientBuilder {
         builders::ProducerClientBuilder::new()
     }
@@ -233,19 +233,20 @@ impl ProducerClient {
     ///
     /// ```no_run
     /// use azure_messaging_eventhubs::ProducerClient;
-    /// use azure_identity::{DefaultAzureCredential, TokenCredentialOptions};
-    /// use std::error::Error;
+    /// use azure_identity::DefaultAzureCredential;
+    /// use azure_core::Error;
     ///
     /// #[tokio::main]
-    /// async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
-    ///   let fully_qualified_namespace = std::env::var("EVENT_HUB_NAMESPACE")?;
-    ///   let eventhub_name = std::env::var("EVENT_HUB_NAME")?;
+    /// async fn main() -> Result<(), Error> {
+    ///   let fully_qualified_namespace = "my_eventhub_host.servicebus.windows.net")?;
+    ///   let eventhub_name = "my_eventhub_name";
     ///   let my_credentials = DefaultAzureCredential::new()?;
-    ///
     ///   let producer = ProducerClient::builder()
     ///    .with_application_id("your_application_id")
-    ///    .open(fully_qualified_namespace.as_str(), eventhub_name.as_str(), my_credentials.clone()).await?;
-    ///   let mut batch = producer.create_batch(None).await?;
+    ///    .open(fully_qualified_namespace=, eventhub_name, my_credentials.clone()).await?;
+    ///
+    ///   let batch = producer.create_batch(None).await?;
+    ///
     ///   Ok(())
     /// }
     /// ```
@@ -275,22 +276,24 @@ impl ProducerClient {
     ///
     /// ```no_run
     /// use azure_messaging_eventhubs::ProducerClient;
-    /// use azure_identity::{DefaultAzureCredential, TokenCredentialOptions};
-    /// use std::error::Error;
+    /// use azure_identity::DefaultAzureCredential;
+    /// use azure_core::Error;
     ///
     /// #[tokio::main]
-    /// async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
-    ///   let fully_qualified_namespace = std::env::var("EVENT_HUB_NAMESPACE")?;
-    ///   let eventhub_name = std::env::var("EVENT_HUB_NAME")?;
+    /// async fn main() -> Result<(), azure_core::Error> {
+    ///   let fully_qualified_namespace = "my_eventhub_host.servicebus.windows.net")?;
+    ///   let eventhub_name = "my_eventhub_name";
     ///   let my_credentials = DefaultAzureCredential::new()?;
     ///
     ///   let producer = ProducerClient::builder()
     ///    .with_application_id("your_application_id")
-    ///    .open(fully_qualified_namespace.as_str(), eventhub_name.as_str(), my_credentials.clone()).await?;
+    ///    .open(fully_qualified_namespace, eventhub_name, my_credentials.clone()).await?;
+    ///   let batch = producer.create_batch(None).await?;
     ///
-    ///   let mut batch = producer.create_batch(None).await?;
     ///   batch.try_add_event_data("Hello, World!", None)?;
+    ///
     ///   producer.send_batch(&batch, None).await?;
+    ///
     ///   Ok(())
     /// }
     /// ```
@@ -325,16 +328,16 @@ impl ProducerClient {
     ///
     /// ```no_run
     /// use azure_messaging_eventhubs::ProducerClient;
-    /// use azure_identity::{DefaultAzureCredential, TokenCredentialOptions};
-    /// use std::error::Error;
+    /// use azure_identity::{DefaultAzureCredential;
+    /// use azure_core::Error;
     ///
     /// #[tokio::main]
-    /// async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
-    ///   let fully_qualified_namespace = std::env::var("EVENT_HUB_NAMESPACE")?;
-    ///   let eventhub_name = std::env::var("EVENT_HUB_NAME")?;
+    /// async fn main() -> Result<(), azure_core::Error> {
+    ///   let fully_qualified_namespace = "my_eventhub_host.servicebus.windows.net")?;
+    ///   let eventhub_name = "my_eventhub_name";
     ///   let my_credentials = DefaultAzureCredential::new()?;
     ///   let producer = ProducerClient::builder()
-    ///     .open(fully_qualified_namespace.as_str(), eventhub_name.as_str(), my_credentials.clone()).await?;
+    ///     .open(fully_qualified_namespace, eventhub_name, my_credentials.clone()).await?;
     ///
     ///   let properties = producer.get_eventhub_properties().await?;
     ///   println!("Event Hub: {:?}", properties);
