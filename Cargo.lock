@@ -466,6 +466,7 @@ name = "azure_template"
 version = "0.1.0"
 dependencies = [
  "azure_template_core",
+ "serde",
 ]
 
 [[package]]
@@ -1633,18 +1634,6 @@ dependencies = [
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "mock_transport"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "azure_core",
- "bytes",
- "log",
- "serde",
- "serde_json",
 ]
 
 [[package]]
