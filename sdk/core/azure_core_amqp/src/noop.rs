@@ -15,6 +15,7 @@ use super::{
     session::{AmqpSession, AmqpSessionApis, AmqpSessionOptions},
     value::{AmqpOrderedMap, AmqpSymbol, AmqpValue},
 };
+use async_trait::async_trait;
 use azure_core::{credentials::AccessToken, error::Result};
 use std::marker::PhantomData;
 
@@ -45,6 +46,8 @@ impl NoopAmqpConnection {
         Self {}
     }
 }
+
+#[async_trait]
 impl AmqpConnectionApis for NoopAmqpConnection {
     async fn open(
         &self,
@@ -96,6 +99,7 @@ impl<'a> NoopAmqpClaimsBasedSecurity<'a> {
     }
 }
 
+#[async_trait]
 impl AmqpClaimsBasedSecurityApis for NoopAmqpClaimsBasedSecurity<'_> {
     async fn attach(&self) -> Result<()> {
         unimplemented!();

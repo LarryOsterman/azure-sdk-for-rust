@@ -4,7 +4,7 @@
 use azure_core::Uuid;
 use std::borrow::Borrow;
 
-#[cfg(feature = "cplusplus")]
+#[cfg(all(feature = "fe2o3_amqp", feature = "cplusplus"))]
 use crate::fe2o3::error::Fe2o3SerializationError;
 #[cfg(all(
     feature = "cplusplus",
@@ -13,6 +13,11 @@ use crate::fe2o3::error::Fe2o3SerializationError;
 ))]
 #[cfg(feature = "cplusplus")]
 use crate::{Deserializable, Serializable};
+#[cfg(all(
+    feature = "cplusplus",
+    feature = "fe2o3_amqp",
+    not(target_arch = "wasm32")
+))]
 #[cfg(feature = "cplusplus")]
 use azure_core::Result;
 use std::time::SystemTime;
@@ -269,7 +274,7 @@ pub enum AmqpValue {
     Unknown,
 }
 
-#[cfg(feature = "cplusplus")]
+#[cfg(all(feature = "fe2o3_amqp", feature = "cplusplus"))]
 impl Serializable for AmqpValue {
     fn encoded_size(&self) -> Result<usize> {
         #[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
@@ -303,7 +308,7 @@ impl Serializable for AmqpValue {
     }
 }
 
-#[cfg(feature = "cplusplus")]
+#[cfg(all(feature = "fe2o3_amqp", feature = "cplusplus"))]
 impl Deserializable<AmqpValue> for AmqpValue {
     #[allow(unused_variables)]
     fn decode(data: &[u8]) -> azure_core::Result<AmqpValue> {

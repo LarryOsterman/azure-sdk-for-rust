@@ -47,6 +47,7 @@ pub trait AmqpSenderApis {
 }
 
 /// Possible outcomes from a Send operation.
+#[derive(Clone, Debug)]
 pub enum AmqpSendOutcome {
     /// The message was accepted by the receiver.
     ///
@@ -111,6 +112,7 @@ pub enum AmqpSendOutcome {
 }
 
 /// If the message was modified in transit, this struct contains the details of the modification.
+#[derive(Debug, Clone)]
 pub struct SendModification {
     /// The message was not delivered to the receiver.
     pub delivery_failed: Option<bool>,

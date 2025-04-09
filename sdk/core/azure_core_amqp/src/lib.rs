@@ -10,15 +10,18 @@ mod fe2o3;
 #[cfg(any(not(feature = "fe2o3_amqp"), target_arch = "wasm32"))]
 mod noop;
 
-pub(crate) mod cbs;
-pub(crate) mod connection;
+#[cfg(test)]
+mod mock;
+
+mod cbs;
+mod connection;
 pub mod error;
-pub(crate) mod management;
-pub(crate) mod messaging;
-pub(crate) mod receiver;
-pub(crate) mod sender;
-pub(crate) mod session;
-pub(crate) mod value;
+mod management;
+mod messaging;
+mod receiver;
+mod sender;
+mod session;
+mod value;
 
 pub use cbs::{AmqpClaimsBasedSecurity, AmqpClaimsBasedSecurityApis};
 pub use connection::{AmqpConnection, AmqpConnectionApis, AmqpConnectionOptions};

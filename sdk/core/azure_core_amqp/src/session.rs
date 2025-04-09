@@ -5,6 +5,7 @@ use super::{
     connection::AmqpConnection,
     value::{AmqpOrderedMap, AmqpSymbol, AmqpValue},
 };
+use async_trait::async_trait;
 use azure_core::error::Result;
 use std::fmt::Debug;
 
@@ -60,14 +61,14 @@ impl AmqpSessionOptions {
     }
 }
 
-#[allow(unused_variables)]
+#[async_trait]
 pub trait AmqpSessionApis {
-    fn begin(
+    async fn begin(
         &self,
         connection: &AmqpConnection,
         options: Option<AmqpSessionOptions>,
-    ) -> impl std::future::Future<Output = Result<()>>;
-    fn end(&self) -> impl std::future::Future<Output = Result<()>>;
+    ) -> Result<()>;
+    async fn end(&self) -> Result<()>;
 }
 
 #[derive(Clone, Default)]
@@ -75,6 +76,7 @@ pub struct AmqpSession {
     pub(crate) implementation: SessionImplementation,
 }
 
+#[async_trait]
 impl AmqpSessionApis for AmqpSession {
     async fn begin(
         &self,

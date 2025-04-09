@@ -4,17 +4,20 @@
 use super::value::{AmqpList, AmqpOrderedMap, AmqpSymbol, AmqpTimestamp, AmqpValue};
 #[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
 use crate::fe2o3::error::Fe2o3SerializationError;
+
+#[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
 #[cfg(feature = "cplusplus")]
 use crate::Deserializable;
+#[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
 #[cfg(feature = "cplusplus")]
 use azure_core::error::ErrorKind;
 use azure_core::{Result, Uuid};
 use std::time::Duration;
 
-#[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32"),))]
 type DeliveryImplementation = super::fe2o3::messaging::messaging_types::Fe2o3AmqpDelivery;
 
-#[cfg(any(not(feature = "fe2o3_amqp"), target_arch = "wasm32"))]
+#[cfg(all(not(feature = "fe2o3_amqp"), target_arch = "wasm32"))]
 type DeliveryImplementation = super::noop::NoopAmqpDelivery;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1231,6 +1234,8 @@ impl From<AmqpList> for AmqpMessage {
         }
     }
 }
+
+#[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
 #[cfg(feature = "cplusplus")]
 impl Deserializable<AmqpMessage> for AmqpMessage {
     fn decode(data: &[u8]) -> azure_core::Result<AmqpMessage> {
@@ -1245,6 +1250,10 @@ impl Deserializable<AmqpMessage> for AmqpMessage {
             >(data)
             .map_err(|e| azure_core::error::Error::new(ErrorKind::Other, e))?;
             Ok(value.0.into())
+        }
+        #[cfg(any(not(feature = "fe2o3_amqp"), target_arch = "wasm32"))]
+        {
+            unimplemented!();
         }
     }
 }
@@ -1964,6 +1973,7 @@ mod tests {
             assert_eq!(amqp_message, value.0);
         }
 
+        #[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
         #[cfg(feature = "cplusplus")]
         {
             let deserialized = AmqpMessage::decode(&serialized).unwrap();
