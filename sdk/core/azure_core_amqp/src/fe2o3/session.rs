@@ -2,14 +2,14 @@
 // Licensed under the MIT license.
 
 use crate::{
-    connection::AmqpConnection,
     error::AmqpErrorKind,
     session::{AmqpSessionApis, AmqpSessionOptions},
-    AmqpError,
+    AmqpConnection, AmqpConnectionApis, AmqpError,
 };
 use async_trait::async_trait;
 use azure_core::Result;
 use std::{
+    any::Any,
     borrow::BorrowMut,
     sync::{Arc, OnceLock},
 };
@@ -67,11 +67,23 @@ impl Fe2o3AmqpSession {
 impl AmqpSessionApis for Fe2o3AmqpSession {
     async fn begin(
         &self,
-        connection: &AmqpConnection,
+        connection: &Arc<dyn AmqpConnectionApis + Send + Sync>,
         options: Option<AmqpSessionOptions>,
     ) -> Result<()> {
+        // Check type using type_id instead of downcasting
+        let any_connection = connection as &dyn Any;
+        let amqp_connection = match any_connection.downcast_ref::<&Arc<AmqpConnection>>() {
+            Some(conn) => conn,
+            None => {
+                return Err(azure_core::Error::message(
+                    azure_core::error::ErrorKind::Amqp,
+                    "Connection is not of type AmqpConnection",
+                ))
+            }
+        };
+
+        let connection = &amqp_connection.implementation;
         let mut connection = connection
-            .implementation
             .get()
             .get()
             .ok_or_else(Self::session_already_attached)?

@@ -1,13 +1,11 @@
 // Copyright (c) Microsoft Corporation. All Rights reserved
 // Licensed under the MIT license.
 
-use super::{
-    connection::AmqpConnection,
-    value::{AmqpOrderedMap, AmqpSymbol, AmqpValue},
-};
+use super::value::{AmqpOrderedMap, AmqpSymbol, AmqpValue};
+use crate::AmqpConnectionApis;
 use async_trait::async_trait;
 use azure_core::error::Result;
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
 #[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
 type SessionImplementation = super::fe2o3::session::Fe2o3AmqpSession;
@@ -65,7 +63,7 @@ impl AmqpSessionOptions {
 pub trait AmqpSessionApis {
     async fn begin(
         &self,
-        connection: &AmqpConnection,
+        connection: &Arc<dyn AmqpConnectionApis + Send + Sync>,
         options: Option<AmqpSessionOptions>,
     ) -> Result<()>;
     async fn end(&self) -> Result<()>;
@@ -80,7 +78,7 @@ pub struct AmqpSession {
 impl AmqpSessionApis for AmqpSession {
     async fn begin(
         &self,
-        connection: &AmqpConnection,
+        connection: &Arc<dyn AmqpConnectionApis + Send + Sync>,
         options: Option<AmqpSessionOptions>,
     ) -> Result<()> {
         self.implementation.begin(connection, options).await

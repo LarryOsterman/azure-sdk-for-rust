@@ -445,7 +445,7 @@ impl ProducerClient {
         let connection = self.connection_manager.get_connection()?;
 
         let session = AmqpSession::new();
-        session.begin(connection.as_ref(), None).await?;
+        session.begin(&connection, None).await?;
         trace!("Session created.");
 
         let management_path = self.endpoint.to_string() + "/$management";
@@ -479,7 +479,7 @@ impl ProducerClient {
             let session = AmqpSession::new();
             session
                 .begin(
-                    connection.as_ref(),
+                    &connection,
                     Some(AmqpSessionOptions {
                         incoming_window: Some(u32::MAX),
                         outgoing_window: Some(u32::MAX),

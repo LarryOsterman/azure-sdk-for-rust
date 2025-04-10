@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. All Rights reserved
 // Licensed under the MIT license.
 
+use super::error::Fe2o3ReceiverAttachError;
 use crate::{
     error::AmqpErrorKind,
     fe2o3::error::{Fe2o3IllegalLinkStateError, Fe2o3ReceiverError},
@@ -15,8 +16,6 @@ use std::borrow::BorrowMut;
 use std::sync::OnceLock;
 use tokio::sync::Mutex;
 use tracing::{info, trace, warn};
-
-use super::error::Fe2o3ReceiverAttachError;
 
 #[derive(Default)]
 pub(crate) struct Fe2o3AmqpReceiver {
@@ -139,12 +138,16 @@ impl AmqpReceiverApis for Fe2o3AmqpReceiver {
             .await;
 
         trace!("Accepting delivery.");
+        let Some(fe2o3_delivery) = &delivery.fe2o3 else {
+            return Err(azure_core::Error::message(
+                azure_core::error::ErrorKind::Amqp,
+                "Expected Fe2o3AmqpDelivery variant",
+            ));
+        };
         receiver
-            .accept(&delivery.0.delivery)
+            .accept(&fe2o3_delivery.delivery)
             .await
             .map_err(|e| azure_core::Error::from(Fe2o3IllegalLinkStateError(e)))?;
-        trace!("Accepted delivery.");
-
         Ok(())
     }
 
@@ -157,15 +160,19 @@ impl AmqpReceiverApis for Fe2o3AmqpReceiver {
             .await;
 
         trace!("Rejecting delivery.");
+        let Some(fe2o3_delivery) = &delivery.fe2o3 else {
+            return Err(azure_core::Error::message(
+                azure_core::error::ErrorKind::Amqp,
+                "Expected Fe2o3AmqpDelivery variant",
+            ));
+        };
         receiver
-            .reject(&delivery.0.delivery, None)
+            .reject(&fe2o3_delivery.delivery, None)
             .await
             .map_err(|e| azure_core::Error::from(Fe2o3IllegalLinkStateError(e)))?;
         trace!("Rejected delivery.");
-
         Ok(())
     }
-
     async fn release_delivery(&self, delivery: &AmqpDelivery) -> Result<()> {
         let receiver = self
             .receiver
@@ -175,16 +182,21 @@ impl AmqpReceiverApis for Fe2o3AmqpReceiver {
             .await;
 
         trace!("Releasing delivery.");
+        let Some(fe2o3_delivery) = &delivery.fe2o3 else {
+            return Err(azure_core::Error::message(
+                azure_core::error::ErrorKind::Amqp,
+                "Expected Fe2o3AmqpDelivery variant",
+            ));
+        };
+
         receiver
-            .release(&delivery.0.delivery)
+            .release(&fe2o3_delivery.delivery)
             .await
             .map_err(|e| azure_core::Error::from(Fe2o3IllegalLinkStateError(e)))?;
-        trace!("Released delivery.");
 
         Ok(())
     }
 }
-
 impl Fe2o3AmqpReceiver {
     pub fn new() -> Self {
         Self {

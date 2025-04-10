@@ -420,7 +420,7 @@ impl ConsumerClient {
         trace!("Create management session.");
         let connection = self.connection_manager.get_connection()?;
         let session = AmqpSession::new();
-        session.begin(connection.as_ref(), None).await?;
+        session.begin(&connection, None).await?;
         trace!("Session created.");
 
         let management_path = self.endpoint.to_string() + "/$management";
@@ -457,7 +457,7 @@ impl ConsumerClient {
             let connection = self.connection_manager.get_connection()?;
 
             let session = AmqpSession::new();
-            session.begin(connection.as_ref(), None).await?;
+            session.begin(&connection, None).await?;
             session_instances.insert(partition_id.to_string(), Arc::new(session));
         }
         let rv = session_instances

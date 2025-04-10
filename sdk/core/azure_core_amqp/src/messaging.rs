@@ -14,12 +14,6 @@ use azure_core::error::ErrorKind;
 use azure_core::{Result, Uuid};
 use std::time::Duration;
 
-#[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32"),))]
-type DeliveryImplementation = super::fe2o3::messaging::messaging_types::Fe2o3AmqpDelivery;
-
-#[cfg(all(not(feature = "fe2o3_amqp"), target_arch = "wasm32"))]
-type DeliveryImplementation = super::noop::NoopAmqpDelivery;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum TerminusDurability {
     None,
@@ -93,12 +87,36 @@ impl From<AmqpSymbol> for DistributionMode {
     }
 }
 
-pub struct AmqpDelivery(pub(crate) DeliveryImplementation);
+#[derive(Debug, Default)]
+pub struct AmqpDelivery {
+    /// The underlying implementation of the AMQP delivery.
+    #[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
+    pub(crate) fe2o3: Option<super::fe2o3::messaging::messaging_types::Fe2o3AmqpDelivery>,
+
+    #[cfg(all(not(feature = "fe2o3_amqp"), target_arch = "wasm32"))]
+    pub(crate) noop: Option<super::noop::NoopAmqpDelivery>,
+
+    #[cfg(feature = "mock")]
+    pub(crate) mock: Option<super::mock::MockAmqpDelivery>,
+}
 
 impl AmqpDelivery {
-    #[allow(dead_code)]
-    pub(crate) fn new(delivery: DeliveryImplementation) -> AmqpDelivery {
-        AmqpDelivery(delivery)
+    #[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
+    pub(crate) fn new_from_fe2o3(
+        delivery: super::fe2o3::messaging::messaging_types::Fe2o3AmqpDelivery,
+    ) -> AmqpDelivery {
+        AmqpDelivery {
+            fe2o3: Some(delivery),
+            ..Default::default()
+        }
+    }
+
+    #[cfg(feature = "mock")]
+    pub fn new_from_mock(delivery: super::mock::MockAmqpDelivery) -> AmqpDelivery {
+        AmqpDelivery {
+            mock: Some(delivery),
+            ..Default::default()
+        }
     }
 }
 
@@ -116,27 +134,74 @@ pub trait AmqpDeliveryApis {
 impl AmqpDeliveryApis for AmqpDelivery {
     /// Get the message
     fn message(&self) -> &AmqpMessage {
-        self.0.message()
+        #[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
+        if let Some(ref delivery) = self.fe2o3 {
+            return delivery.message();
+        }
+
+        #[cfg(all(not(feature = "fe2o3_amqp"), target_arch = "wasm32"))]
+        if let Some(ref delivery) = self.noop {
+            return delivery.message();
+        }
+
+        panic!("No delivery available");
     }
 
     /// Get the delivery ID
     fn delivery_id(&self) -> DeliveryNumber {
-        self.0.delivery_id()
+        #[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
+        if let Some(ref delivery) = self.fe2o3 {
+            return delivery.delivery_id();
+        }
+
+        #[cfg(all(not(feature = "fe2o3_amqp"), target_arch = "wasm32"))]
+        #[cfg(all(not(feature = "fe2o3_amqp"), target_arch = "wasm32"))]
+        if let Some(ref delivery) = self.noop {
+            return delivery.message();
+        }
+
+        panic!("No delivery available");
     }
 
     /// Get the delivery tag
     fn delivery_tag(&self) -> &DeliveryTag {
-        self.0.delivery_tag()
+        #[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
+        if let Some(ref delivery) = self.fe2o3 {
+            return delivery.delivery_tag();
+        }
+
+        #[cfg(all(not(feature = "fe2o3_amqp"), target_arch = "wasm32"))]
+        if let Some(ref delivery) = self.noop {
+            return delivery.delivery_tag();
+        }
+        panic!("No delivery available");
     }
 
     /// Get the message format
     fn message_format(&self) -> &Option<u32> {
-        self.0.message_format()
-    }
+        #[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
+        if let Some(ref delivery) = self.fe2o3 {
+            return delivery.message_format();
+        }
 
+        #[cfg(all(not(feature = "fe2o3_amqp"), target_arch = "wasm32"))]
+        if let Some(ref delivery) = self.noop {
+            return delivery.message_format();
+        }
+        panic!("No delivery available");
+    }
     /// Consume the delivery into the message
     fn into_message(self) -> AmqpMessage {
-        self.0.into_message()
+        #[cfg(all(feature = "fe2o3_amqp", not(target_arch = "wasm32")))]
+        if let Some(delivery) = self.fe2o3 {
+            return delivery.into_message();
+        }
+
+        #[cfg(all(not(feature = "fe2o3_amqp"), target_arch = "wasm32"))]
+        if let Some(delivery) = self.noop {
+            return delivery.into_message();
+        }
+        panic!("No delivery available");
     }
 }
 

@@ -3,6 +3,7 @@
 
 use crate::messaging::{AmqpDeliveryApis, AmqpMessage, DeliveryNumber, DeliveryTag};
 
+#[derive(Debug)]
 pub struct MockAmqpDelivery {
     message: AmqpMessage,
     delivery_id: DeliveryNumber,

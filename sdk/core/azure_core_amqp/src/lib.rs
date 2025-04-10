@@ -10,7 +10,7 @@ mod fe2o3;
 #[cfg(any(not(feature = "fe2o3_amqp"), target_arch = "wasm32"))]
 mod noop;
 
-#[cfg(test)]
+#[cfg(feature = "mock")]
 mod mock;
 
 mod cbs;
@@ -73,4 +73,15 @@ pub trait Serializable {
 #[cfg(feature = "cplusplus")]
 pub trait Deserializable<T> {
     fn decode(data: &[u8]) -> azure_core::Result<T>;
+}
+
+#[cfg(feature = "mock")]
+pub mod mocks {
+    pub use super::mock::MockAmqpClaimsBasedSecurity;
+    pub use super::mock::MockAmqpConnection;
+    pub use super::mock::MockAmqpDelivery;
+    pub use super::mock::MockAmqpManagement;
+    pub use super::mock::MockAmqpReceiver;
+    pub use super::mock::MockAmqpSender;
+    pub use super::mock::MockAmqpSession;
 }

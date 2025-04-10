@@ -46,7 +46,7 @@ impl MockAmqpReceiver {
 
     pub fn queue_mock_delivery(&self, data: Vec<u8>) {
         let delivery = MockAmqpDelivery::new_with_data(data);
-        self.queue_delivery(AmqpDelivery(delivery));
+        self.queue_delivery(AmqpDelivery::new_from_mock(delivery));
     }
 }
 
@@ -84,7 +84,7 @@ impl AmqpReceiverApis for MockAmqpReceiver {
         let mut queue = self.delivery_queue.lock().unwrap();
         if queue.is_empty() {
             // Create a default delivery if none are queued
-            Ok(AmqpDelivery(MockAmqpDelivery::new()))
+            Ok(AmqpDelivery::new_from_mock(MockAmqpDelivery::new()))
         } else {
             Ok(queue.remove(0))
         }

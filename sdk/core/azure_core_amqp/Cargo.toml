@@ -37,7 +37,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [features]
 default = ["fe2o3_amqp"]
-#mock = []
+mock = []
 cplusplus = []
 fe2o3_amqp = [
   "dep:fe2o3-amqp",

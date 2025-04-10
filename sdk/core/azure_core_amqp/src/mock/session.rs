@@ -1,8 +1,10 @@
 // Copyright (c) Microsoft Corporation. All Rights reserved
 // Licensed under the MIT license.
 
-use crate::connection::AmqpConnection;
-use crate::session::{AmqpSessionApis, AmqpSessionOptions};
+use crate::{
+    connection::AmqpConnectionApis,
+    session::{AmqpSessionApis, AmqpSessionOptions},
+};
 use async_trait::async_trait;
 use azure_core::Result;
 use std::sync::{Arc, Mutex};
@@ -35,7 +37,7 @@ impl MockAmqpSession {
 impl AmqpSessionApis for MockAmqpSession {
     async fn begin(
         &self,
-        _connection: &AmqpConnection,
+        _connection: &Arc<dyn AmqpConnectionApis + Send + Sync>,
         options: Option<AmqpSessionOptions>,
     ) -> Result<()> {
         *self.is_begun.lock().unwrap() = true;

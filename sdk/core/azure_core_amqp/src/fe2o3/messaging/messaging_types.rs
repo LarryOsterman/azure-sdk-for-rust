@@ -8,6 +8,7 @@ use crate::messaging::{
     DistributionMode, TerminusDurability, TerminusExpiryPolicy,
 };
 
+#[derive(Debug)]
 pub(crate) struct Fe2o3AmqpDelivery {
     pub(crate) delivery: fe2o3_amqp::link::delivery::Delivery<
         fe2o3_amqp_types::messaging::Body<fe2o3_amqp_types::primitives::Value>,
@@ -28,7 +29,7 @@ impl
             fe2o3_amqp_types::messaging::Body<fe2o3_amqp_types::primitives::Value>,
         >,
     ) -> Self {
-        AmqpDelivery::new(Fe2o3AmqpDelivery {
+        AmqpDelivery::new_from_fe2o3(Fe2o3AmqpDelivery {
             delivery,
             message: OnceLock::new(),
             delivery_tag: OnceLock::new(),
