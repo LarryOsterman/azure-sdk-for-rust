@@ -10,9 +10,13 @@ use syn::{
 };
 
 const INVALID_RECORDED_ATTRIBUTE_MESSAGE: &str =
-    "expected `#[recorded::test]` or `#[recorded::test(live)]`";
+    "expected `#[recorded::test]`, #[recorded::test(live)], or `#[recorded::test(bench)]`";
+
 const INVALID_RECORDED_FUNCTION_MESSAGE: &str =
     "expected `async fn(TestContext)` function signature with `Result<T, E>` return";
+
+const INVALID_BENCHMARK_FUNCTION_MESSAGE: &str =
+    "expected `fn(&mut Criterion)` function signature with `()` return";
 
 // cspell:ignore asyncness
 pub fn parse_test(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
@@ -25,21 +29,70 @@ pub fn parse_test(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     } = syn::parse2(item)?;
 
     let mut test_attr: TokenStream = match original_sig.asyncness {
-        Some(_) => quote! { #[::tokio::test(flavor = "multi_thread")] },
+        Some(_) => {
+            if recorded_attrs.bench {
+                // Benchmark functions cannot be async.
+                return Err(syn::Error::new(
+                    original_sig.span(),
+                    INVALID_BENCHMARK_FUNCTION_MESSAGE,
+                ));
+            }
+            quote! { #[::tokio::test(flavor = "multi_thread")] }
+        }
         None => {
-            return Err(syn::Error::new(
-                original_sig.span(),
-                INVALID_RECORDED_FUNCTION_MESSAGE,
-            ))
+            // Non benchmark functions must be async.
+            if !recorded_attrs.bench {
+                return Err(syn::Error::new(
+                    original_sig.span(),
+                    INVALID_RECORDED_FUNCTION_MESSAGE,
+                ));
+            }
+            quote! {}
         }
     };
 
     // Assumes the return type is a `Result<T, E>` since that's all `#[test]`s support currently.
     if let ReturnType::Default = original_sig.output {
-        return Err(syn::Error::new(
-            original_sig.output.span(),
-            INVALID_RECORDED_FUNCTION_MESSAGE,
-        ));
+        if !recorded_attrs.bench {
+            // Benchmark functions cannot have a return type.
+            return Err(syn::Error::new(
+                original_sig.output.span(),
+                INVALID_RECORDED_FUNCTION_MESSAGE,
+            ));
+        }
+    } else if let ReturnType::Type(_, ty) = &original_sig.output {
+        if recorded_attrs.bench {
+            // Benchmark functions cannot have a return type.
+            return Err(syn::Error::new(
+                original_sig.output.span(),
+                INVALID_BENCHMARK_FUNCTION_MESSAGE,
+            ));
+        }
+        if let syn::Type::Path(syn::TypePath { path, .. }) = ty.as_ref() {
+            if path.leading_colon.is_none()
+                && path.segments.len() == 1
+                && path.segments[0].ident != "Result"
+            {
+                return Err(syn::Error::new(
+                    original_sig.output.span(),
+                    INVALID_RECORDED_FUNCTION_MESSAGE,
+                ));
+            }
+
+            if path.segments.len() == 2
+                && (path.segments[0].ident != "azure_core" || path.segments[1].ident != "Result")
+            {
+                return Err(syn::Error::new(
+                    original_sig.output.span(),
+                    INVALID_RECORDED_FUNCTION_MESSAGE,
+                ));
+            }
+        } else {
+            return Err(syn::Error::new(
+                original_sig.output.span(),
+                INVALID_RECORDED_FUNCTION_MESSAGE,
+            ));
+        }
     }
 
     // Ignore live-only tests if not running live tests.
@@ -56,6 +109,22 @@ pub fn parse_test(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         None if recorded_attrs.live => quote! {
             #fn_name().await
         },
+        None if recorded_attrs.bench => {
+            // Benchmark functions must have at least one parameter.
+            return Err(syn::Error::new(
+                original_sig.span(),
+                INVALID_BENCHMARK_FUNCTION_MESSAGE,
+            ));
+        }
+        Some(FnArg::Typed(PatType { ty, .. }))
+            if recorded_attrs.bench && is_mut_criterion(ty.as_ref()) =>
+        {
+            println!("Benchmark with a criterion parameter");
+            // Benchmark functions cannot have a setup context.
+            quote!(
+                #fn_name(c);
+            )
+        }
         Some(FnArg::Typed(PatType { ty, .. })) if is_test_context(ty.as_ref()) => {
             let test_mode = test_mode_to_tokens(test_mode);
             quote! {
@@ -74,11 +143,12 @@ pub fn parse_test(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
             return Err(syn::Error::new(
                 original_sig.ident.span(),
                 INVALID_RECORDED_FUNCTION_MESSAGE,
-            ))
+            ));
         }
     };
 
     if let Some(arg) = inputs.next() {
+        println!("Too many parameters: {arg:?}");
         return Err(syn::Error::new(
             arg.span(),
             format!("too many parameters; {INVALID_RECORDED_FUNCTION_MESSAGE}"),
@@ -110,6 +180,7 @@ static TEST_MODE: LazyLock<TestMode> = LazyLock::new(|| {
 #[derive(Debug, Default)]
 struct Attributes {
     live: bool,
+    bench: bool,
 }
 
 impl Parse for Attributes {
@@ -123,6 +194,7 @@ impl Parse for Attributes {
                     })?;
                     match ident.to_string().as_str() {
                         "live" => attrs.live = true,
+                        "bench" => attrs.bench = true,
                         _ => {
                             return Err(syn::Error::new(
                                 arg.span(),
@@ -141,6 +213,36 @@ impl Parse for Attributes {
         }
 
         Ok(attrs)
+    }
+}
+
+fn is_mut_criterion(arg: &syn::Type) -> bool {
+    match arg {
+        syn::Type::Reference(syn::TypeReference {
+            mutability, elem, ..
+        }) => {
+            if mutability.is_none() {
+                return false;
+            }
+            let path = match elem.as_ref() {
+                syn::Type::Path(syn::TypePath { path, .. }) => path,
+                _ => {
+                    return false;
+                }
+            };
+
+            if path.leading_colon.is_none()
+                && path.segments.len() == 1
+                && path.segments[0].ident == "Criterion"
+            {
+                return true;
+            }
+
+            path.segments.len() == 2
+                && path.segments[0].ident == "criterion"
+                && path.segments[1].ident == "Criterion"
+        }
+        _ => false,
     }
 }
 
@@ -182,6 +284,17 @@ mod tests {
         };
         let attrs: Attributes = attr.parse_args().unwrap();
         assert!(attrs.live);
+        assert!(!attrs.bench);
+    }
+
+    #[test]
+    fn attributes_parse_bench() {
+        let attr: Attribute = syn::parse_quote! {
+            #[recorded(bench)]
+        };
+        let attrs: Attributes = attr.parse_args().unwrap();
+        assert!(attrs.bench);
+        assert!(!attrs.live);
     }
 
     #[test]
@@ -255,13 +368,83 @@ mod tests {
 
     #[test]
     fn parse_recorded_live() {
-        let attr = quote! { live };
-        let item = quote! {
-            async fn live_only() -> azure_core::Result<()> {
-                todo!()
-            }
-        };
-        parse_test(attr, item).unwrap();
+        {
+            let attr = quote! { live };
+            let item = quote! {
+                async fn live_only() -> azure_core::Result<()> {
+                    todo!()
+                }
+            };
+            parse_test(attr, item).unwrap();
+        }
+        {
+            let attr = quote! { live };
+            let item = quote! {
+                 async fn live_with_context(ctx: TestContext) -> azure_core::Result<()> {
+                    todo!()
+                }
+            };
+            parse_test(attr, item).unwrap();
+        }
+
+        {
+            let attr = quote! { live };
+            let item = quote! {
+                async fn live_too_many_params(ctx: TestContext, name: &'static str) -> azure_core::Result<()> {
+                    todo!()
+                }
+            };
+            parse_test(attr, item).unwrap_err();
+        }
+    }
+
+    #[test]
+    fn parse_recorded_bench() {
+        {
+            let attr = quote! { bench };
+            let item = quote! {
+                fn bench(c: &mut Criterion) {
+                    todo!()
+                }
+            };
+            parse_test(attr, item).unwrap();
+        }
+        {
+            let attr = quote! { bench };
+            let item = quote! {
+                async fn bench(c: &mut Criterion) {
+                    todo!()
+                }
+            };
+            assert!(parse_test(attr, item).is_err());
+        }
+        {
+            let attr = quote! { bench };
+            let item = quote! {
+                fn bench(c: & Criterion) {
+                    todo!()
+                }
+            };
+            assert!(parse_test(attr, item).is_err());
+        }
+        {
+            let attr = quote! { bench };
+            let item = quote! {
+                fn bench(c: &mut TestContext) {
+                    todo!()
+                }
+            };
+            assert!(parse_test(attr, item).is_err());
+        }
+        {
+            let attr = quote! { bench };
+            let item = quote! {
+                fn bench(c: &mut Criterion) -> azure_core::Result<()> {
+                    todo!()
+                }
+            };
+            assert!(parse_test(attr, item).is_err());
+        }
     }
 
     #[test]

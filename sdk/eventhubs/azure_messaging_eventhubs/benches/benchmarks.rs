@@ -1,6 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
+// cspell: ignore dotenv dotenvy
+
+use azure_core_test::recorded;
 use azure_identity::DefaultAzureCredential;
 use azure_messaging_eventhubs::{models::EventData, ProducerClient, SendEventOptions};
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -22,7 +25,7 @@ fn setup() {
     //         .init();
     // });
 }
-
+#[recorded::test(bench)]
 fn send_batch_benchmark(c: &mut Criterion) {
     setup();
 
@@ -149,7 +152,7 @@ fn get_eventhub_partition_properties(c: &mut Criterion) {
                 let _ = client
                     .get_partition_properties("0")
                     .await
-                    .expect("Failed to get event hub properties");
+                    .expect("Failed to get event hub partition properties");
             }
         });
     });
