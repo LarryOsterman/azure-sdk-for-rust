@@ -8,6 +8,7 @@ members = [
   "sdk/core/azure_core_amqp",
   "sdk/core/azure_core_test",
   "sdk/core/azure_core_test_macros",
+  "sdk/core/azure_core_tracing_opentelemetry",
   "sdk/cosmos/azure_data_cosmos",
   "sdk/identity/azure_identity",
   "sdk/eventhubs/azure_messaging_eventhubs",
@@ -118,6 +119,9 @@ tokio = { version = "1.0", default-features = false, features = [
 ] }
 tracing = "0.1.40"
 tracing-subscriber = "0.3"
+tracing-opentelemetry = "0.26"
+opentelemetry = "0.30"
+opentelemetry_sdk = "0.30"
 url = "2.2"
 uuid = { version = "1.0", features = ["v4"] }
 zerofrom = "0.1.5"
