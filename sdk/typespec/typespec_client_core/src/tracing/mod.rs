@@ -18,9 +18,20 @@ use std::future::Future;
 /// Tracing is designed to be transparent and
 pub mod attributes;
 
+/// The TracerProvider trait is the entrypoint for distributed tracing in the SDK.
+///
+/// It provides a method to get a tracer for a specific name and package version.
 pub trait TracerProvider {
     /// Returns a tracer for the given name.
-    fn get_tracer(&self, name: &str) -> Box<dyn Tracer + Send + Sync>;
+    ///
+    /// Arguments:
+    /// - `package_name`: The name of the package for which the tracer is requested.
+    /// - `package_version`: The version of the package for which the tracer is requested.
+    fn get_tracer(
+        &self,
+        package_name: String,
+        package_version: String,
+    ) -> Box<dyn Tracer + Send + Sync>;
 }
 
 pub trait Tracer {
@@ -42,7 +53,11 @@ pub trait Span {
     fn end(&self);
 
     /// Adds an event to the current span.
-    fn add_event(&self, name: &str, attributes: Option<Vec<attributes::KeyValue>>);
+    fn add_event(
+        &self,
+        name: &str,
+        attributes: Option<Vec<attributes::KeyValue>>,
+    ) -> crate::Result<()>;
 
     fn set_attribute(&self, key: &str, value: attributes::AttributeValue);
 

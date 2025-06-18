@@ -11,9 +11,9 @@ use azure_core::tracing::attributes::{
 
 pub(super) struct AttributeArray(AzureAttributeArray);
 
-pub(super) struct AttributeValue(AzureAttributeValue);
+pub(super) struct AttributeValue(pub AzureAttributeValue);
 
-pub(super) struct KeyValue(AzureKeyValue);
+pub(super) struct KeyValue(pub AzureKeyValue);
 
 impl From<bool> for AttributeValue {
     fn from(value: bool) -> Self {
