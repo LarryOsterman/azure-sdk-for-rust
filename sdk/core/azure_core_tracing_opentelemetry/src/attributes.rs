@@ -106,11 +106,3 @@ impl From<AttributeArray> for opentelemetry::Array {
         }
     }
 }
-
-/// Helper function to create a KeyValue from key and value
-pub fn key_value(key: impl Into<String>, value: AttributeValue) -> KeyValue {
-    KeyValue(AzureKeyValue {
-        key: key.into(),
-        value: value.0,
-    })
-}

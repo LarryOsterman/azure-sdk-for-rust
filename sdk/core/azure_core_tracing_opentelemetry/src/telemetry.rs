@@ -4,10 +4,7 @@
 use crate::tracer::OpenTelemetryTracer;
 use azure_core::tracing::TracerProvider;
 use azure_core::Result;
-use opentelemetry::{
-    global::{ObjectSafeTracer, ObjectSafeTracerProvider},
-    InstrumentationScope,
-};
+use opentelemetry::{global::ObjectSafeTracerProvider, InstrumentationScope};
 use std::sync::Arc;
 
 /// Enum to hold different OpenTelemetry tracer provider implementations.
@@ -17,6 +14,7 @@ pub struct OpenTelemetryTracerProvider {
 
 impl OpenTelemetryTracerProvider {
     /// Creates a new Azure telemetry provider with the given SDK tracer provider.
+    #[allow(dead_code)]
     pub fn new(provider: Arc<dyn ObjectSafeTracerProvider + Send + Sync>) -> Result<Self> {
         Ok(Self { inner: provider })
     }
@@ -38,11 +36,19 @@ impl TracerProvider for OpenTelemetryTracerProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opentelemetry::trace::noop::NoopTracerProvider;
     use opentelemetry_sdk::trace::SdkTracerProvider;
 
     #[test]
-    fn test_create_tracer_provider() {
+    fn test_create_tracer_provider_sdk_tracer() {
         let provider = Arc::new(SdkTracerProvider::builder().build());
+        let tracer_provider = OpenTelemetryTracerProvider::new(provider);
+        assert!(tracer_provider.is_ok());
+    }
+
+    #[test]
+    fn test_create_tracer_provider_noop_tracer() {
+        let provider = Arc::new(NoopTracerProvider::new());
         let tracer_provider = OpenTelemetryTracerProvider::new(provider);
         assert!(tracer_provider.is_ok());
     }

@@ -36,10 +36,7 @@ pub trait TracerProvider {
 
 pub trait Tracer {
     /// Starts a new span with the given name.
-    fn start_span(&self, name: &str) -> Box<dyn Span + Send + Sync>;
-
-    /// Sets the current span as active.
-    fn set_active_span(&self, span: Box<dyn Span + Send + Sync>);
+    fn start_span(&self, name: String) -> Box<dyn Span + Send + Sync>;
 }
 
 pub enum SpanStatus {
@@ -50,20 +47,20 @@ pub enum SpanStatus {
 
 pub trait Span {
     /// Ends the current span.
-    fn end(&self);
+    fn end(&self) -> crate::Result<()>;
 
     /// Adds an event to the current span.
     fn add_event(
         &self,
-        name: &str,
+        name: String,
         attributes: Option<Vec<attributes::KeyValue>>,
     ) -> crate::Result<()>;
 
-    fn set_attribute(&self, key: &str, value: attributes::AttributeValue);
+    fn set_attribute(&self, key: String, value: attributes::AttributeValue) -> crate::Result<()>;
 
-    fn record_error(&self, error: &dyn std::error::Error);
+    fn record_error(&self, error: &dyn std::error::Error) -> crate::Result<()>;
 
-    fn set_status(&self, status: SpanStatus);
+    fn set_status(&self, status: SpanStatus) -> crate::Result<()>;
 }
 
 /// The WithSpan trait enables the creation of a `with_span` method which returns a wrapped future that
