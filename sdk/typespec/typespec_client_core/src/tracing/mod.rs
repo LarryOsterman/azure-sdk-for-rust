@@ -3,8 +3,6 @@
 
 //! Distributed tracing trait definitions
 
-use std::future::Future;
-
 /// Overall architecture for distributed tracing in the SDK.
 ///
 /// This module defines the traits that are used to implement distributed tracing functionality.
@@ -15,8 +13,8 @@ use std::future::Future;
 /// - Tracer: This trait is responsible for creating spans and managing the active span.
 /// - Span: This trait represents a single unit of work in the distributed tracing system.
 ///
-/// Tracing is designed to be transparent and
 pub mod attributes;
+pub mod with_span;
 
 /// The TracerProvider trait is the entrypoint for distributed tracing in the SDK.
 ///
@@ -45,6 +43,11 @@ pub enum SpanStatus {
     Error { description: String },
 }
 
+pub trait SpanGuard {
+    /// Ends the span when dropped.
+    fn end(self) -> crate::Result<()>;
+}
+
 pub trait Span {
     /// Ends the current span.
     fn end(&self) -> crate::Result<()>;
@@ -61,16 +64,8 @@ pub trait Span {
     fn record_error(&self, error: &dyn std::error::Error) -> crate::Result<()>;
 
     fn set_status(&self, status: SpanStatus) -> crate::Result<()>;
-}
 
-/// The WithSpan trait enables the creation of a `with_span` method which returns a wrapped future that
-/// sets the current span for the duration of the future's execution.
-///
-/// see also: [opentelemetry::trace::FutureExt](https://docs.rs/opentelemetry/latest/opentelemetry/trace/trait.FutureExt.html) or
-/// [tracing::instrument](https://docs.rs/tracing/latest/tracing/trait.Instrument.html) for similar functionality in other tracing libraries.
-pub trait WithSpan: Sized {
-    fn with_span(
-        self,
-        span: Box<dyn Span + Send + Sync>,
-    ) -> Box<dyn Future<Output = Self> + Send + Sync>;
+    fn set_current(&self) -> Box<dyn SpanGuard>;
+
+    fn get_current(&self) -> Option<Box<dyn Span + Send + Sync>>;
 }
