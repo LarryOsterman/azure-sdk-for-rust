@@ -3,7 +3,11 @@
 
 use crate::span::OpenTelemetrySpan;
 use azure_core::tracing::Tracer;
-use opentelemetry::{global::BoxedTracer, trace::Tracer as OpenTelemetryTracerTrait, Context};
+use opentelemetry::{
+    global::BoxedTracer,
+    trace::{TraceContextExt, Tracer as OpenTelemetryTracerTrait},
+    Context,
+};
 use std::sync::Arc;
 
 pub struct OpenTelemetryTracer {
@@ -21,10 +25,9 @@ impl Tracer for OpenTelemetryTracer {
     fn start_span(&self, name: String) -> Arc<dyn azure_core::tracing::Span + Send + Sync> {
         let span_builder = opentelemetry::trace::SpanBuilder::from_name(name.to_string());
         let context = Context::current();
-        OpenTelemetrySpan::new(
-            self.inner.build_with_context(span_builder, &context),
-            context,
-        )
+        let span = self.inner.build_with_context(span_builder, &context);
+
+        OpenTelemetrySpan::new(context.with_span(span))
     }
 }
 
