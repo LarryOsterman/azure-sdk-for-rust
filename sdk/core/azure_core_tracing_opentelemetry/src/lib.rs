@@ -11,5 +11,8 @@ mod attributes;
 //mod conventions;
 mod span;
 //mod span_future;
-mod telemetry;
+pub mod telemetry;
 mod tracer;
+
+// Re-export the main types for convenience
+pub use telemetry::OpenTelemetryTracerProvider;

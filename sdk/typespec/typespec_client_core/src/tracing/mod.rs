@@ -38,14 +38,31 @@ pub trait TracerProvider {
 }
 
 pub trait Tracer {
-    /// Starts a new span with the given name.
-    fn start_span(&self, name: String) -> Arc<dyn Span + Send + Sync>;
-}
+    /// Starts a new span with the given name and type.
+    fn start_span(&self, name: String, kind: SpanKind) -> Arc<dyn Span + Send + Sync>;
 
+    /// Starts a new child with the given name, type, and parent span.
+    fn start_span_with_parent(
+        &self,
+        name: String,
+        kind: SpanKind,
+        parent: Arc<dyn Span + Send + Sync>,
+    ) -> Arc<dyn Span + Send + Sync>;
+}
 pub enum SpanStatus {
     Unset,
     Ok,
     Error { description: String },
+}
+
+#[derive(Debug, Default)]
+pub enum SpanKind {
+    #[default]
+    Internal,
+    Client,
+    Server,
+    Producer,
+    Consumer,
 }
 
 pub trait SpanGuard {

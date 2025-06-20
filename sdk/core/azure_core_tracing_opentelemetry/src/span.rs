@@ -16,6 +16,21 @@ use azure_core::{
 use opentelemetry::trace::TraceContextExt;
 use std::{error::Error as StdError, sync::Arc, time::SystemTime};
 
+/// newtype for Azure Core SpanKind to enable conversion to OpenTelemetry SpanKind
+pub(crate) struct OpenTelemetrySpanKind(pub azure_core::tracing::SpanKind);
+
+impl From<OpenTelemetrySpanKind> for opentelemetry::trace::SpanKind {
+    fn from(span_kind: OpenTelemetrySpanKind) -> Self {
+        match span_kind.0 {
+            azure_core::tracing::SpanKind::Internal => opentelemetry::trace::SpanKind::Internal,
+            azure_core::tracing::SpanKind::Server => opentelemetry::trace::SpanKind::Server,
+            azure_core::tracing::SpanKind::Client => opentelemetry::trace::SpanKind::Client,
+            azure_core::tracing::SpanKind::Producer => opentelemetry::trace::SpanKind::Producer,
+            azure_core::tracing::SpanKind::Consumer => opentelemetry::trace::SpanKind::Consumer,
+        }
+    }
+}
+
 /// OpenTelemetry implementation of Span
 pub(super) struct OpenTelemetrySpan {
     context: opentelemetry::Context,
@@ -116,7 +131,7 @@ impl Drop for OpenTelemetrySpanGuard {
 mod tests {
     use crate::telemetry::OpenTelemetryTracerProvider;
     use azure_core::http::Context as AzureContext;
-    use azure_core::tracing::{attributes::AttributeValue, SpanStatus, TracerProvider};
+    use azure_core::tracing::{attributes::AttributeValue, SpanKind, SpanStatus, TracerProvider};
     use opentelemetry::trace::TraceContextExt;
     use opentelemetry::{Context, Key, KeyValue, Value};
     use opentelemetry_sdk::trace::{in_memory_exporter::InMemorySpanExporter, SdkTracerProvider};
@@ -141,7 +156,7 @@ mod tests {
         let tracer = tracer_provider
             .unwrap()
             .get_tracer("test".to_string(), "0.1.0".to_string());
-        let span = tracer.start_span("test_span".to_string());
+        let span = tracer.start_span("test_span".to_string(), SpanKind::Client);
         assert!(span.end().is_ok());
 
         let spans = otel_exporter.get_finished_spans().unwrap();
@@ -155,6 +170,38 @@ mod tests {
     }
 
     #[test]
+    fn test_open_telemetry_span_hierarchy() {
+        let (otel_tracer_provider, otel_exporter) = create_exportable_tracer_provider();
+        let tracer_provider = OpenTelemetryTracerProvider::new(otel_tracer_provider);
+        assert!(tracer_provider.is_ok());
+        let tracer = tracer_provider
+            .unwrap()
+            .get_tracer("test".to_string(), "0.1.0".to_string());
+        let parent_span = tracer.start_span("parent_span".to_string(), SpanKind::Server);
+        let child_span = tracer.start_span_with_parent(
+            "child_span".to_string(),
+            SpanKind::Client,
+            parent_span.clone(),
+        );
+
+        assert!(child_span.end().is_ok());
+        assert!(parent_span.end().is_ok());
+
+        let spans = otel_exporter.get_finished_spans().unwrap();
+        assert_eq!(spans.len(), 2);
+        for span in &spans {
+            println!("Span: {:?}", span);
+            if span.name == "parent_span" {
+                assert_eq!(span.status, opentelemetry::trace::Status::Unset);
+                assert_eq!(span.parent_span_id, opentelemetry::trace::SpanId::INVALID);
+            } else if span.name == "child_span" {
+                assert_eq!(span.status, opentelemetry::trace::Status::Unset);
+                assert_ne!(span.parent_span_id, opentelemetry::trace::SpanId::INVALID);
+            }
+        }
+    }
+
+    #[test]
     fn test_open_telemetry_span_add_event() {
         let (otel_tracer_provider, otel_exporter) = create_exportable_tracer_provider();
         let tracer_provider = OpenTelemetryTracerProvider::new(otel_tracer_provider);
@@ -162,7 +209,7 @@ mod tests {
         let tracer = tracer_provider
             .unwrap()
             .get_tracer("test".to_string(), "0.1.0".to_string());
-        let span = tracer.start_span("test_span".to_string());
+        let span = tracer.start_span("test_span".to_string(), SpanKind::Internal);
         assert!(span.add_event("test_event".to_string(), None).is_ok());
         assert!(span.end().is_ok());
 
@@ -186,7 +233,7 @@ mod tests {
         let tracer = tracer_provider
             .unwrap()
             .get_tracer("test".to_string(), "0.1.0".to_string());
-        let span = tracer.start_span("test_span".to_string());
+        let span = tracer.start_span("test_span".to_string(), SpanKind::Internal);
 
         assert!(span
             .set_attribute(
@@ -217,7 +264,7 @@ mod tests {
         let tracer = tracer_provider
             .unwrap()
             .get_tracer("test".to_string(), "0.1.0".to_string());
-        let span = tracer.start_span("test_span".to_string());
+        let span = tracer.start_span("test_span".to_string(), SpanKind::Client);
 
         let error = Error::new(ErrorKind::NotFound, "resource not found");
         assert!(span.record_error(&error).is_ok());
@@ -248,12 +295,12 @@ mod tests {
             .get_tracer("test".to_string(), "0.1.0".to_string());
 
         // Test Ok status
-        let span = tracer.start_span("test_span_ok".to_string());
+        let span = tracer.start_span("test_span_ok".to_string(), SpanKind::Server);
         assert!(span.set_status(SpanStatus::Ok).is_ok());
         assert!(span.end().is_ok());
 
         // Test Error status
-        let span = tracer.start_span("test_span_error".to_string());
+        let span = tracer.start_span("test_span_error".to_string(), SpanKind::Server);
         assert!(span
             .set_status(SpanStatus::Error {
                 description: "test error".to_string()
@@ -295,7 +342,7 @@ mod tests {
             42
         };
 
-        let span = tracer.start_span("test_span".to_string());
+        let span = tracer.start_span("test_span".to_string(), SpanKind::Client);
 
         let azure_context = AzureContext::new();
         let azure_context = azure_context.with_value(span.clone());
