@@ -2,6 +2,10 @@
 // Licensed under the MIT License.
 
 //! Distributed tracing trait definitions
+//!
+use std::sync::Arc;
+
+use crate::http::Context;
 
 /// Overall architecture for distributed tracing in the SDK.
 ///
@@ -14,7 +18,8 @@
 /// - Span: This trait represents a single unit of work in the distributed tracing system.
 ///
 pub mod attributes;
-pub mod with_span;
+pub mod with_context;
+pub use with_context::{FutureExt, WithContext};
 
 /// The TracerProvider trait is the entrypoint for distributed tracing in the SDK.
 ///
@@ -34,7 +39,7 @@ pub trait TracerProvider {
 
 pub trait Tracer {
     /// Starts a new span with the given name.
-    fn start_span(&self, name: String) -> Box<dyn Span + Send + Sync>;
+    fn start_span(&self, name: String) -> Arc<dyn Span + Send + Sync>;
 }
 
 pub enum SpanStatus {
@@ -65,7 +70,5 @@ pub trait Span {
 
     fn set_status(&self, status: SpanStatus) -> crate::Result<()>;
 
-    fn set_current(&self) -> Box<dyn SpanGuard>;
-
-    fn get_current(&self) -> Option<Box<dyn Span + Send + Sync>>;
+    fn set_current(&self, context: &Context) -> crate::Result<Box<dyn SpanGuard>>;
 }

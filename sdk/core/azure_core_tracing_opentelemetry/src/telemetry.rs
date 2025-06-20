@@ -4,7 +4,10 @@
 use crate::tracer::OpenTelemetryTracer;
 use azure_core::tracing::TracerProvider;
 use azure_core::Result;
-use opentelemetry::{global::ObjectSafeTracerProvider, InstrumentationScope};
+use opentelemetry::{
+    global::{BoxedTracer, ObjectSafeTracerProvider},
+    InstrumentationScope,
+};
 use std::sync::Arc;
 
 /// Enum to hold different OpenTelemetry tracer provider implementations.
@@ -29,7 +32,9 @@ impl TracerProvider for OpenTelemetryTracerProvider {
         let scope = InstrumentationScope::builder(name)
             .with_version(package_version)
             .build();
-        Box::new(OpenTelemetryTracer::new(self.inner.boxed_tracer(scope)))
+        Box::new(OpenTelemetryTracer::new(BoxedTracer::new(
+            self.inner.boxed_tracer(scope),
+        )))
     }
 }
 

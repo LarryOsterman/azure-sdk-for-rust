@@ -3,24 +3,28 @@
 
 use crate::span::OpenTelemetrySpan;
 use azure_core::tracing::Tracer;
-use opentelemetry::{global::ObjectSafeTracer, Context};
+use opentelemetry::{global::BoxedTracer, trace::Tracer as OpenTelemetryTracerTrait, Context};
+use std::sync::Arc;
 
 pub struct OpenTelemetryTracer {
-    inner: Box<dyn ObjectSafeTracer + Send + Sync>,
+    inner: BoxedTracer,
 }
 
 impl OpenTelemetryTracer {
     /// Creates a new OpenTelemetry tracer with the given inner tracer.
-    pub(super) fn new(tracer: Box<dyn ObjectSafeTracer + Send + Sync>) -> Self {
+    pub(super) fn new(tracer: BoxedTracer) -> Self {
         Self { inner: tracer }
     }
 }
 
 impl Tracer for OpenTelemetryTracer {
-    fn start_span(&self, name: String) -> Box<dyn azure_core::tracing::Span + Send + Sync> {
+    fn start_span(&self, name: String) -> Arc<dyn azure_core::tracing::Span + Send + Sync> {
         let span_builder = opentelemetry::trace::SpanBuilder::from_name(name.to_string());
         let context = Context::current();
-        OpenTelemetrySpan::new(self.inner.build_with_context_boxed(span_builder, &context))
+        OpenTelemetrySpan::new(
+            self.inner.build_with_context(span_builder, &context),
+            context,
+        )
     }
 }
 

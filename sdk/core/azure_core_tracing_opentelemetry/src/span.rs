@@ -9,16 +9,36 @@ use crate::attributes::{
 use azure_core::{
     tracing::{
         attributes::{AttributeValue, KeyValue},
-        Span, SpanStatus,
+        Span, SpanGuard, SpanStatus,
     },
     Error, Result,
 };
-use opentelemetry::global::ObjectSafeSpan;
-use std::{error::Error as StdError, sync::Mutex, time::SystemTime};
+use opentelemetry::{
+    global::{BoxedSpan, ObjectSafeSpan},
+    trace::TraceContextExt,
+};
+use std::{
+    error::Error as StdError,
+    sync::{Arc, Mutex},
+    time::SystemTime,
+};
+
+struct OtelSpanState {
+    span: BoxedSpan,
+    context: opentelemetry::Context,
+}
 
 /// OpenTelemetry implementation of Span
-pub struct OpenTelemetrySpan {
-    inner: Mutex<Box<dyn ObjectSafeSpan + Send + Sync>>,
+pub(super) struct OpenTelemetrySpan {
+    inner: Mutex<OtelSpanState>,
+}
+
+impl OpenTelemetrySpan {
+    pub fn new(span: BoxedSpan, context: opentelemetry::Context) -> Arc<Self> {
+        Arc::new(Self {
+            inner: Mutex::new(OtelSpanState { span, context }),
+        })
+    }
 }
 
 impl Span for OpenTelemetrySpan {
@@ -30,12 +50,12 @@ impl Span for OpenTelemetrySpan {
                 format!("Failed to lock span: {e:?}"),
             )
         })?;
-        inner.end();
+        inner.span.end();
         Ok(())
     }
 
     fn add_event(&self, name: String, attributes: Option<Vec<KeyValue>>) -> Result<()> {
-        let mut span = self.inner.lock().map_err(|e| {
+        let mut inner = self.inner.lock().map_err(|e| {
             Error::message(
                 azure_core::error::ErrorKind::Other,
                 format!("Failed to lock span: {e:?}"),
@@ -46,34 +66,40 @@ impl Span for OpenTelemetrySpan {
                 .into_iter()
                 .map(|kv| ConversionKeyValue(kv).into())
                 .collect();
-            span.add_event_with_timestamp(name.into(), SystemTime::now(), otel_attrs);
+            inner
+                .span
+                .add_event_with_timestamp(name.into(), SystemTime::now(), otel_attrs);
         } else {
-            span.add_event_with_timestamp(name.into(), SystemTime::now(), vec![]);
+            inner
+                .span
+                .add_event_with_timestamp(name.into(), SystemTime::now(), vec![]);
         }
         Ok(())
     }
 
     fn set_attribute(&self, key: String, value: AttributeValue) -> Result<()> {
         let otel_value = opentelemetry::Value::from(ConversionAttributeValue(value));
-        let mut span = self.inner.lock().map_err(|e| {
+        let mut inner = self.inner.lock().map_err(|e| {
             Error::message(
                 azure_core::error::ErrorKind::Other,
                 format!("Failed to lock span: {e:?}"),
             )
         })?;
-        span.set_attribute(opentelemetry::KeyValue::new(key, otel_value));
+        inner
+            .span
+            .set_attribute(opentelemetry::KeyValue::new(key, otel_value));
         Ok(())
     }
 
     fn record_error(&self, error: &dyn StdError) -> Result<()> {
-        let mut span = self.inner.lock().map_err(|e| {
+        let mut inner = self.inner.lock().map_err(|e| {
             Error::message(
                 azure_core::error::ErrorKind::Other,
                 format!("Failed to lock span: {e:?}"),
             )
         })?;
-        if span.is_recording() {
-            span.add_event_with_timestamp(
+        if inner.span.is_recording() {
+            inner.span.add_event_with_timestamp(
                 std::borrow::Cow::Borrowed("error"),
                 SystemTime::now(),
                 vec![opentelemetry::KeyValue::new(
@@ -82,7 +108,7 @@ impl Span for OpenTelemetrySpan {
                 )],
             );
         }
-        span.set_status(opentelemetry::trace::Status::Error {
+        inner.span.set_status(opentelemetry::trace::Status::Error {
             description: error.to_string().into(),
         });
         Ok(())
@@ -102,26 +128,60 @@ impl Span for OpenTelemetrySpan {
                     format!("Failed to lock span: {e:?}"),
                 )
             })?
-            .as_mut()
+            .span
             .set_status(otel_status);
+        Ok(())
+    }
+
+    fn set_current(
+        &self,
+        _context: &azure_core::http::Context,
+    ) -> typespec_client_core::Result<Box<dyn SpanGuard>> {
+        let inner = self.inner.lock().map_err(|e| {
+            Error::message(
+                azure_core::error::ErrorKind::Other,
+                format!("Failed to lock span: {e:?}"),
+            )
+        })?;
+
+        // Create a context with the current span
+        let context_guard = inner.context.clone().attach();
+
+        println!("Setting current OpenTelemetry span context");
+        Ok(Box::new(OpenTelemetrySpanGuard {
+            _inner: context_guard,
+        }))
+    }
+}
+
+struct OpenTelemetrySpanGuard {
+    _inner: opentelemetry::ContextGuard,
+}
+
+impl SpanGuard for OpenTelemetrySpanGuard {
+    fn end(self) -> Result<()> {
+        // The span is ended when the guard is dropped, so no action needed here.
         Ok(())
     }
 }
 
-impl OpenTelemetrySpan {
-    pub fn new(inner: Box<dyn ObjectSafeSpan + Send + Sync>) -> Box<Self> {
-        Box::new(Self {
-            inner: Mutex::new(inner),
-        })
+impl Drop for OpenTelemetrySpanGuard {
+    fn drop(&mut self) {
+        // The OpenTelemetry context guard will automatically end the span when dropped.
+        println!(
+            "Dropping OpenTelemetry span guard, ending span: {:?}",
+            self._inner
+        );
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::telemetry::OpenTelemetryTracerProvider;
-    use azure_core::tracing::attributes::AttributeValue;
-    use azure_core::tracing::SpanStatus;
-    use azure_core::tracing::TracerProvider;
+    use azure_core::http::Context as AzureContext;
+    use azure_core::tracing::{attributes::AttributeValue, SpanStatus, TracerProvider};
+    use opentelemetry::trace::TraceContextExt;
+    use opentelemetry::{Context, Key, KeyValue, Value};
     use opentelemetry_sdk::trace::{in_memory_exporter::InMemorySpanExporter, SdkTracerProvider};
     use std::io::{Error, ErrorKind};
     use std::sync::Arc;
@@ -275,5 +335,52 @@ mod tests {
             error_span.status,
             opentelemetry::trace::Status::error("test error")
         );
+    }
+
+    #[tokio::test]
+    async fn test_open_telemetry_span_futures() {
+        let (otel_tracer_provider, otel_exporter) = create_exportable_tracer_provider();
+        let tracer_provider = OpenTelemetryTracerProvider::new(otel_tracer_provider);
+        assert!(tracer_provider.is_ok());
+        let tracer = tracer_provider
+            .unwrap()
+            .get_tracer("test".to_string(), "0.1.0".to_string());
+
+        let future = async {
+            let context = Context::current();
+            println!("In captured context: {:?}", context);
+            context.span().add_event("name", vec![]);
+            context.span().set_attribute(KeyValue::new(
+                Key::from("test_key"),
+                Value::from("test_value"),
+            ));
+            context.span().end();
+            42
+        };
+
+        let span = tracer.start_span("test_span".to_string());
+
+        let azure_context = AzureContext::new();
+        let azure_context = azure_context.with_value(span.clone());
+
+        let _guard = span.set_current(&azure_context).unwrap();
+
+        let result = future.await;
+
+        assert_eq!(result, 42);
+        span.end().unwrap();
+
+        let spans = otel_exporter.get_finished_spans().unwrap();
+        assert_eq!(spans.len(), 1);
+        for span in &spans {
+            assert_eq!(span.name, "test_span");
+            assert_eq!(span.events.len(), 1);
+            assert_eq!(span.attributes.len(), 1);
+            assert_eq!(span.attributes[0].key, "test_key".into());
+            assert_eq!(
+                format!("{:?}", span.attributes[0].value),
+                "String(Owned(\"test_value\"))"
+            );
+        }
     }
 }
