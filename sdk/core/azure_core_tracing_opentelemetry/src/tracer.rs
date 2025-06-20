@@ -2,14 +2,13 @@
 // Licensed under the MIT License.
 
 use crate::span::{OpenTelemetrySpan, OpenTelemetrySpanKind};
-use azure_core::tracing::Tracer;
+use azure_core::tracing::{SpanKind, Tracer};
 use opentelemetry::{
     global::BoxedTracer,
     trace::{TraceContextExt, Tracer as OpenTelemetryTracerTrait},
     Context,
 };
 use std::sync::Arc;
-use typespec_client_core::tracing::SpanKind;
 
 pub struct OpenTelemetryTracer {
     inner: BoxedTracer,
@@ -35,6 +34,7 @@ impl Tracer for OpenTelemetryTracer {
 
         OpenTelemetrySpan::new(context.with_span(span))
     }
+
     fn start_span_with_parent(
         &self,
         name: String,
@@ -43,11 +43,14 @@ impl Tracer for OpenTelemetryTracer {
     ) -> Arc<dyn azure_core::tracing::Span + Send + Sync> {
         let span_builder = opentelemetry::trace::SpanBuilder::from_name(name.to_string())
             .with_kind(OpenTelemetrySpanKind(kind).into());
-        let parent_span = parent
+
+        // Cast the parent span to Any type
+        let context = parent
             .as_any()
             .downcast_ref::<OpenTelemetrySpan>()
-            .expect("Parent span must be an OpenTelemetrySpan");
-        let context = parent_span.context().clone();
+            .unwrap()
+            .context()
+            .clone();
         let span = self.inner.build_with_context(span_builder, &context);
 
         OpenTelemetrySpan::new(context.with_span(span))

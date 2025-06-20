@@ -9,7 +9,7 @@ use crate::attributes::{
 use azure_core::{
     tracing::{
         attributes::{AttributeValue, KeyValue},
-        Span, SpanGuard, SpanStatus,
+        AsAny, Span, SpanGuard, SpanStatus,
     },
     Result,
 };
@@ -39,6 +39,9 @@ pub(super) struct OpenTelemetrySpan {
 impl OpenTelemetrySpan {
     pub fn new(context: opentelemetry::Context) -> Arc<Self> {
         Arc::new(Self { context })
+    }
+    pub(super) fn context(&self) -> &opentelemetry::Context {
+        &self.context
     }
 }
 
@@ -79,6 +82,10 @@ impl Span for OpenTelemetrySpan {
 
     fn record_error(&self, error: &dyn StdError) -> Result<()> {
         self.context.span().record_error(error);
+
+        self.context
+            .span()
+            .set_status(opentelemetry::trace::Status::error(error.to_string()));
         Ok(())
     }
 
@@ -103,6 +110,12 @@ impl Span for OpenTelemetrySpan {
         Ok(Box::new(OpenTelemetrySpanGuard {
             _inner: context_guard,
         }))
+    }
+}
+
+impl AsAny for OpenTelemetrySpan {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -279,9 +292,9 @@ mod tests {
                 opentelemetry::trace::Status::error("resource not found")
             );
             assert_eq!(span.events.len(), 1);
-            assert_eq!(span.events[0].name, "error");
+            assert_eq!(span.events[0].name, "exception");
             assert_eq!(span.events[0].attributes.len(), 1);
-            assert_eq!(span.events[0].attributes[0].key, "error.message".into());
+            assert_eq!(span.events[0].attributes[0].key, "exception.message".into());
         }
     }
 

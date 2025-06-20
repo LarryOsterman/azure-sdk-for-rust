@@ -70,7 +70,7 @@ pub trait SpanGuard {
     fn end(self) -> crate::Result<()>;
 }
 
-pub trait Span {
+pub trait Span: AsAny {
     /// Ends the current span.
     fn end(&self) -> crate::Result<()>;
 
@@ -88,4 +88,9 @@ pub trait Span {
     fn set_status(&self, status: SpanStatus) -> crate::Result<()>;
 
     fn set_current(&self, context: &Context) -> crate::Result<Box<dyn SpanGuard>>;
+}
+
+pub trait AsAny {
+    /// Returns a reference to the current object as a trait object.
+    fn as_any(&self) -> &dyn std::any::Any;
 }

@@ -29,7 +29,8 @@ pub use typespec_client_core::{
 
 pub mod tracing {
     pub use typespec_client_core::tracing::{
-        FutureExt, Span, SpanGuard, SpanKind, SpanStatus, Tracer, TracerProvider, WithContext,
+        AsAny, FutureExt, Span, SpanGuard, SpanKind, SpanStatus, Tracer, TracerProvider,
+        WithContext,
     };
     pub mod attributes {
         pub use typespec_client_core::tracing::attributes::{
