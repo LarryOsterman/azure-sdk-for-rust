@@ -6,19 +6,7 @@ enabling automatic span creation, context propagation, and telemetry collection 
 
 It allows Rust applications which use the [OpenTelemetry](https://opentelemetry.io/) APIs to generate OpenTelemetry spans for Azure SDK for Rust Clients.
 
-The OpenTelemetry integration package can be found at [Open Telemetry Tracing Package], and is documented at [Open Telemetry Tracing Documentation]
-
 ## OpenTelemetry integration with the Azure SDK for Rust
-
-### Installation
-
-To add support for open telemetry
-
-```bash
-cargo add azure_core_opentelemetry
-```
-
-### Using the package
 
 To integrate the OpenTelemetry APIs with the Azure SDK for Rust, you create a `OpenTelemetryTracerProvider` and pass it into your SDK ClientOptions.
 
@@ -102,12 +90,10 @@ Security issues and bugs should be reported privately, via email, to the Microso
 
 ## License
 
-Azure SDK for Rust is licensed under the [MIT](https://github.com/Azure/azure-sdk-for-rust/blob/main/LICENSE.txt) license.
+Azure SDK for Rust is licensed under the [MIT](https://github.com/Azure/azure-sdk-for-cpp/blob/main/LICENSE.txt) license.
 
 <!-- LINKS -->
 
-[Open Telemetry Tracing Package]: https://crates.io/crates/azure_core_opentelemetry
-[Open Telemetry Tracing Documentation]: https://docs.rs/azure_core_opentelemetry/latest/azure_core_opentelemetry/
 [Microsoft Open Source Code of Conduct]: https://opensource.microsoft.com/codeofconduct/
 [CONTRIBUTING.md]: https://github.com/Azure/azure-sdk-for-rust/blob/main/CONTRIBUTING.md
 [Code of Conduct FAQ]: https://opensource.microsoft.com/codeofconduct/faq/

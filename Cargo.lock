@@ -294,6 +294,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "azure_core_tracing"
+version = "0.2.0"
+dependencies = [
+ "azure_core",
+ "azure_core_test",
+ "azure_core_test_macros",
+ "azure_identity",
+ "reqwest",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "typespec_client_core",
+ "url",
+]
+
+[[package]]
 name = "azure_data_cosmos"
 version = "0.27.0"
 dependencies = [
