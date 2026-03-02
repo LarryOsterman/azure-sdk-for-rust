@@ -286,6 +286,6 @@ Additional specialized instructions for specific workflows can be found in:
 
 **Last Updated**: 2026-02-28
 **Version**: 2.0
-**Canonical Spec**: <https://agents.md>
+**Canonical Spec**: <<https://agents.md>
 
-[Azure/azure-rest-api-specs]: https://github.com/Azure/azure-rest-api-specs
+[Azure/azure-rest-api-specs]: https://github.com/Azure/azure-rest-api-specs>
