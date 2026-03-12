@@ -2,8 +2,8 @@
 
 paths:
   skills: .github/skills/
-  evals: .github/evals/
-  results: .github/results/
+  evals: tests/evals/
+  results: tests/results/
 defaults:
   engine: copilot-sdk
   model: claude-sonnet-4.6
@@ -17,7 +17,7 @@ cache:
   dir: .waza-cache
 server:
   port: 3000
-  resultsDir: results/
+  resultsDir: tests/results/
 dev:
   model: claude-sonnet-4-20250514
   target: medium-high

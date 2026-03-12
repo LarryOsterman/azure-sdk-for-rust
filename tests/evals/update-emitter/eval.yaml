@@ -19,10 +19,5 @@ graders:
     config:
       assertions:
         - "len(output) > 0"
-  - type: regex
-    name: relevant_content
-    config:
-      must_match:
-        - "(?i)(explain|describe|analyze|implement)"
 tasks:
   - "tasks/*.yaml"

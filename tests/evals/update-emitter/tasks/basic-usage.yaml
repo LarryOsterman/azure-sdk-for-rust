@@ -5,10 +5,10 @@ description: |
 tags:
   - basic
   - happy-path
+fixtures:
+  - repo: "https://github.com/azure/azure-sdk-for-rust.git"
 inputs:
-  prompt: "Help me with this task"
-  files:
-    - path: sample.py
+  prompt: "Update the emitter to the current published version"
 expected:
   output_contains:
     - "function"
