@@ -1,3 +1,5 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/eval.schema.json
+
 id: basic-usage-001
 name: Basic Usage
 description: |
@@ -5,12 +7,36 @@ description: |
 tags:
   - basic
   - happy-path
-fixtures:
-  - repo: "https://github.com/azure/azure-sdk-for-rust.git"
 inputs:
-  prompt: "Update the emitter to the current published version"
+  prompt: "Update the typespec emitter to the current published version"
+  files:
+    - path: agents.md
+    - path: eng/common/tsp-client/package.json
+    - path: eng/common/tsp-client/package-lock.json
+    - path: eng/common/tsp-client/README.md
+    - path: sdk/keyvault/azure_security_keyvault_certificates/cargo.toml
+    - path: sdk/keyvault/azure_security_keyvault_certificates/tsp-location.yaml
+    - path: cargo.toml
+    - path: cargo.lock
+
 expected:
   output_contains:
     - "function"
   outcomes:
     - type: task_completed
+
+graders:
+  - type: skill_invocation
+    name: verify update emitter
+    description: Grades whether the skill was invoked correctly based on expected output.
+    config:
+      mode: exact_match
+      required_skills:
+        - update-emitter
+  - type: action_sequence
+    name: tool action sequence
+    description: Grades the content of the skill's output against expected output.
+    config:
+      matching_mode: any_order_match
+      expected_actions:
+        - "powershell"

@@ -6,6 +6,8 @@ description: |-
     DO NOT USE FOR: general coding questions unrelated to update-emitter, creating new projects from scratch.
 ---
 
+## Update the emitter.
+
 Run `eng/scripts/Update-Emitter.ps1` to update `eng/emitter-package.json` to the latest `@azure-tools/typespec-rust` version and regenerate the lock file.
 
 ## Regenerating clients

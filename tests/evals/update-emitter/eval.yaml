@@ -1,3 +1,5 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/waza/main/schemas/eval.schema.json
+
 name: update-emitter-eval
 description: Evaluation suite for update-emitter.
 skill: update-emitter
@@ -8,16 +10,13 @@ config:
   parallel: false
   executor: copilot-sdk
   model: claude-sonnet-4.6
+  skill_directories:
+    - "../../../.github/skills/update-emitter"
 metrics:
   - name: task_completion
     weight: 1.0
     threshold: 0.8
     description: Did the skill complete the assigned task?
-graders:
-  - type: code
-    name: has_output
-    config:
-      assertions:
-        - "len(output) > 0"
+
 tasks:
   - "tasks/*.yaml"

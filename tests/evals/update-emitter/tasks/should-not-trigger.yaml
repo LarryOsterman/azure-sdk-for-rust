@@ -1,5 +1,5 @@
 id: should-not-trigger-001
-name: Should Not Trigger
+name: Should Not Trigger Skill
 description: |
   Test that the skill does NOT activate on unrelated prompts.
   This validates trigger specificity.
@@ -11,3 +11,20 @@ inputs:
 expected:
   output_not_contains:
     - "skill activated"
+graders:
+  - type: skill_invocation
+    name: verify update emitter
+    description: |-
+      Grades whether the skill was invoked correctly based on expected output.
+        For this test, we expect that the skill should NOT be invoked, so we check that no skill invocations are present in the output.
+    config:
+      mode: any_order_match
+      required_skills: []
+  - type: action_sequence
+    name: tool action sequence
+    description: |-
+      Grades the content of the skill's output against expected output.
+      For this test, no skills should be invoked, so we check that no tool actions are present.
+    config:
+      matching_mode: any_order_match
+      expected_actions: []
