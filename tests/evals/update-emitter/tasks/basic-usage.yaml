@@ -2,8 +2,8 @@
 
 id: basic-usage-001
 name: Basic Usage
-description: |
-  Test that the skill handles a typical request correctly.
+#description: |
+#  Test that the skill handles a typical request correctly.
 tags:
   - basic
   - happy-path
@@ -14,6 +14,7 @@ inputs:
     - path: eng/common/tsp-client/package.json
     - path: eng/common/tsp-client/package-lock.json
     - path: eng/common/tsp-client/README.md
+    - path: eng/scripts/Update-Emitter.ps1
     - path: sdk/keyvault/azure_security_keyvault_certificates/cargo.toml
     - path: sdk/keyvault/azure_security_keyvault_certificates/tsp-location.yaml
     - path: cargo.toml
@@ -28,15 +29,25 @@ expected:
 graders:
   - type: skill_invocation
     name: verify update emitter
-    description: Grades whether the skill was invoked correctly based on expected output.
+    #    description: Grades whether the skill was invoked correctly based on expected output.
     config:
       mode: exact_match
+      allow_extra: false
       required_skills:
         - update-emitter
+  - type: tool_constraint
+    name: verify tool usage usage
+    #    description: Grades whether the skill invoked the expected tools.
+    config:
+      expect_tools:
+        - tool: skill
+        - tool: powershell
+          command_pattern: ".*Update-Emitter.ps1.*"
   - type: action_sequence
     name: tool action sequence
-    description: Grades the content of the skill's output against expected output.
+    #    description: Grades the content of the skill's output against expected output.
     config:
-      matching_mode: any_order_match
+      matching_mode: in_order_match
       expected_actions:
+        - "skill"
         - "powershell"
